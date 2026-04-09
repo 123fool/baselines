@@ -1,0 +1,24 @@
+# Innovation 4: 3D Perceptual Loss + Frequency Domain Constraint
+# AE finetuning configuration for MCI brain aging prediction
+
+# ---- Paths (server) ----
+dataset_csv: /home/wangchong/data/fwz/data/diagnosis_categorized/mci_brlp_innovation.csv
+cache_dir: /home/wangchong/data/fwz/cache/innovation_4
+output_dir: /home/wangchong/data/fwz/output/innovation_4/ae_training
+mednet_ckpt: /home/wangchong/data/fwz/code/innovation_4/pretrained/resnet_10_23dataset.pth
+aekl_ckpt: /home/wangchong/data/fwz/brlp-train/pretrained/autoencoder.pth
+disc_ckpt: null
+
+# ---- Training ----
+n_epochs: 5
+max_batch_size: 2
+batch_size: 16
+lr: 0.0001
+num_workers: 8
+aug_p: 0.8
+
+# ---- Innovation 4 ----
+perc_weight: 0.001
+freq_weight: 0.01
+fft_weight: 0.0
+lap_levels: 3

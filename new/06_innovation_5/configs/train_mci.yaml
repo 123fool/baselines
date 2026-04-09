@@ -1,0 +1,59 @@
+# Innovation 5: 海马体区域注意力加权 - 训练配置
+# 用于 MCI 纵向预测任务
+
+# ---- 模型权重路径 (预训练 BrLP) ----
+autoencoder: "/home/wangchong/data/fwz/brlp-train/pretrained/autoencoder.pth"
+unet: "/home/wangchong/data/fwz/brlp-train/pretrained/latentdiffusion.pth"
+controlnet: "/home/wangchong/data/fwz/brlp-train/pretrained/controlnet.pth"
+
+# ---- 辅助模型 ----
+aux:
+  cn: "/home/wangchong/data/fwz/brlp-train/pretrained/dcm_nc.json"
+  mci: "/home/wangchong/data/fwz/brlp-train/pretrained/dcm_mci.json"
+  ad: "/home/wangchong/data/fwz/brlp-train/pretrained/dcm_ad.json"
+
+# ---- 数据 ----
+dataset_csv: "/home/wangchong/data/fwz/data/diagnosis_categorized/mci_brlp_innovation.csv"
+cache_dir: "/home/wangchong/data/fwz/cache/innovation_5"
+
+# ---- 输出 ----
+output_dir: "/home/wangchong/data/fwz/output/innovation_5"
+
+# ---- LAS 参数 ----
+las:
+  m: 10
+
+# ---- Min-max 归一化参数 (与 BrLP 一致) ----
+minmax_params:
+  cerebral_cortex: [370876, 744801]
+  hippocampus: [5006, 13955]
+  amygdala: [1462, 5828]
+  cerebral_white_matter: [323328, 696723]
+  lateral_ventricle: [10404, 191374]
+
+median_corrections:
+  cerebral_cortex: [0.5114, 0.1825]
+  hippocampus: [0.6227, 0.1667]
+  amygdala: [1.0000, 0.0000]
+  cerebral_white_matter: [0.6461, 0.2016]
+  lateral_ventricle: [0.4650, 0.0817]
+
+# ---- Innovation 5 特定参数 ----
+innovation_5:
+  roi_weight: 3.0 # 海马体+杏仁核区域的损失权重倍数
+  region_alpha: 0.5 # 混合因子: 0=纯均匀损失, 1=纯区域损失
+
+  ae_training:
+    n_epochs: 3 # AE 微调 epochs (在预训练基础上)
+    lr: 5e-5 # 微调学习率 (比原始更小)
+    batch_size: 16
+    max_batch_size: 2
+
+  controlnet_training:
+    n_epochs: 5
+    lr: 2.5e-5
+    batch_size: 8 # ControlNet 显存更大，batch 较小
+
+  evaluation:
+    las_m: 5 # 评估时 LAS 参数
+    max_samples: 0 # 0 = 评估全部

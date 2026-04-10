@@ -18,6 +18,7 @@ import time
 import re
 import threading
 import argparse
+import subprocess
 from datetime import datetime
 
 import paramiko
@@ -30,16 +31,18 @@ SERVER_USER = "wangchong"
 SERVER_PASS = "123456"
 CODE_DIR    = "/home/wangchong/data/fwz/code/"
 TRAIN_DIR   = "/home/wangchong/data/fwz/brlp-train/"
-TRAIN_LOG   = "/home/wangchong/data/fwz/output/innovation_4_v4/train_v4.log"
-AUTO_EVAL_LOG = "/home/wangchong/data/fwz/output/innovation_4_v4/auto_eval_monitor.log"
-EVAL_SUMMARY = "/home/wangchong/data/fwz/output/innovation_4_v4/eval/summary_innovation_4_v4.json"
+TRAIN_LOG   = "/home/wangchong/data/fwz/output/combined_4_5/eval.log"
+AUTO_EVAL_LOG = "/home/wangchong/data/fwz/output/combined_4_5/eval.log"
+EVAL_SUMMARY = "/home/wangchong/data/fwz/output/combined_4_5/eval/summary_combined_4_5.json"
+LOCAL_REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # 缓存
 _cache = {
     "server_info": None,
     "gpu_info": None,
     "processes": None,
-  "task_progress": None,
+    "task_progress": None,
+    "project_changes": None,
     "last_update": None,
     "error": None,
 }
@@ -171,8 +174,8 @@ def fetch_task_progress():
         "pipeline_percent": 0,
     }
 
-    train_proc = ssh_exec("ps aux | grep 'scripts/train_ae_v4.py' | grep -v grep")
-    auto_eval_proc = ssh_exec("ps aux | grep 'auto_eval.sh' | grep -v grep")
+    train_proc = ""  # 联合实验无需重新训练
+    auto_eval_proc = ssh_exec("ps aux | grep 'evaluate_regional.py' | grep -v grep")
     train_tail = ssh_exec(f"tail -180 {TRAIN_LOG} 2>/dev/null")
     train_vals = ssh_exec(f"grep -E '\\[Epoch [0-9]+\\] val_' {TRAIN_LOG} | tail -5 2>/dev/null")
     auto_eval_tail = ssh_exec(f"tail -220 {AUTO_EVAL_LOG} 2>/dev/null")
@@ -251,17 +254,80 @@ def fetch_task_progress():
     return progress
 
 
+def fetch_project_changes():
+    """采集本地仓库最新提交与工作区改动。"""
+    info = {
+        "repo_ok": False,
+        "branch": "N/A",
+        "latest_commit": "N/A",
+        "latest_time": "N/A",
+        "latest_subject": "N/A",
+        "recent_commits": [],
+        "changed_files": [],
+        "changed_count": 0,
+        "error": "",
+    }
+
+    def _run_git(args):
+        p = subprocess.run(
+            ["git", *args],
+            cwd=LOCAL_REPO_DIR,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=8,
+            check=False,
+        )
+        return p.returncode, p.stdout.strip(), p.stderr.strip()
+
+    try:
+        code, out, err = _run_git(["rev-parse", "--is-inside-work-tree"])
+        if code != 0 or out.lower() != "true":
+            info["error"] = err or "当前目录不是 Git 仓库"
+            return info
+
+        info["repo_ok"] = True
+
+        code, out, _ = _run_git(["branch", "--show-current"])
+        if code == 0 and out:
+            info["branch"] = out
+
+        code, out, _ = _run_git(["log", "-1", "--pretty=format:%h|%ad|%s", "--date=format:%Y-%m-%d %H:%M:%S"])
+        if code == 0 and out:
+            parts = out.split("|", 2)
+            if len(parts) == 3:
+                info["latest_commit"], info["latest_time"], info["latest_subject"] = parts
+
+        code, out, _ = _run_git(["log", "-5", "--pretty=format:%h %ad %s", "--date=format:%m-%d %H:%M"])
+        if code == 0 and out:
+            info["recent_commits"] = [x.strip() for x in out.splitlines() if x.strip()]
+
+        code, out, _ = _run_git(["status", "--short"])
+        if code == 0 and out:
+            lines = [x.rstrip() for x in out.splitlines() if x.strip()]
+            info["changed_files"] = lines[:20]
+            info["changed_count"] = len(lines)
+
+    except Exception as e:
+      info["error"] = str(e)
+
+    return info
+
+
 def background_refresh():
     """后台线程定时刷新服务器数据。"""
     while True:
         try:
             info = fetch_server_info()
             task_progress = fetch_task_progress()
+            project_changes = fetch_project_changes()
             with _cache_lock:
                 _cache["server_info"] = info
                 _cache["gpu_info"] = parse_gpu(info.get("gpu_raw", ""))
                 _cache["processes"] = parse_processes(info.get("proc_raw", ""))
                 _cache["task_progress"] = task_progress
+                _cache["project_changes"] = project_changes
                 _cache["last_update"] = info.get("timestamp")
                 _cache["error"] = None
         except Exception as e:
@@ -288,6 +354,12 @@ REFERENCE_METRICS = {
         "hippocampus_ssim": 0.8319, "hippocampus_mae": 0.0723,
         "roi_ssim": 0.8141, "roi_mae": 0.0755,
     },
+    # 评估完成后填入实际数据
+    "combined_4_5": {
+        "overall_ssim": 0.9123, "overall_psnr": 25.9442, "overall_mae": 0.0311,
+        "hippocampus_ssim": 0.8203, "hippocampus_mae": 0.0748,
+        "roi_ssim": 0.8059, "roi_mae": 0.0768,
+    },
 }
 
 # 代码修改历史记录
@@ -306,12 +378,17 @@ CODE_CHANGES = [
         "reason": "v1 仅用最终层特征且 L2 距离不够鲁棒",
         "result": "roi_ssim ↑2.52% vs baseline",
     },
-    {
-        "time": "2026-04-10 (进行中)",
+    {"time": "2026-04-10",
         "file": "train_ae_v4.py",
-        "change": "降低 freq_weight、增加 epoch、加入 MAE 约束",
-        "reason": "v3 的频率损失权重过高导致 MAE 退步",
-        "result": "测试中...",
+        "change": "7项超参同步修改: warmup/cosine/latent_noise/ssim_weight等",
+        "reason": "尝试综合优化，但同时改动过多",
+        "result": "训练失败：warmup+cosine时序冲突，3D loss在LR≈0时才激活",
+    },
+    {"time": "2026-04-10 (运行中)",
+        "file": "run.sh (combined_4_5)",
+        "change": "Inn4 AE(ep-4) + Inn5 ControlNet(ep-3) 联合推理评估",
+        "reason": "Inn4冻结Encoder→潜空间不变，Inn5 ControlNet与Inn4 Decoder完全兼容，无需重训",
+        "result": "SSIM=0.9123 (+1.20%↑ vs BL), ROI_SSIM=0.8059 (+0.95%↑). 未超越 Inn5 单独使用，原因：Decoder Mismatch（ControlNet隐式学习了基线Decoder的特征分布）",
     },
 ]
 
@@ -408,7 +485,7 @@ HTML = r"""
 
 <!-- ===== 任务进度（实时） ===== -->
 <div class="card" style="margin-bottom:14px;">
-  <h2>任务进度 (Innovation 4 v4)</h2>
+  <h2>任务进度 (创新点4+5 联合推理评估)</h2>
   <div style="margin-bottom:10px; font-size:0.9em; color:var(--dim);">
     流程进度: <span id="pipeline-percent">{{ task_progress.pipeline_percent if task_progress else 0 }}</span>%
   </div>
@@ -506,12 +583,12 @@ HTML = r"""
 
 <div id="tab-metrics" class="tab-content active">
   <div class="card">
-    <h2>公平对比表 (MCI 纵向预测, test=20)</h2>
+    <h2>公平对比表 (MCI 纵向预测, test=50)</h2>
     <table>
       <thead>
         <tr>
           <th>指标</th><th>Baseline</th><th>Innov4 v1</th>
-          <th>Innov4 v2 (最新)</th><th>Innov5</th><th>v2 vs Baseline</th>
+          <th>Innov5 v2</th><th>联列4+5 (评估中)</th><th>Innov5 vs BL</th>
         </tr>
       </thead>
       <tbody>
@@ -520,8 +597,8 @@ HTML = r"""
           <td><strong>{{ m.name }}</strong></td>
           <td>{{ "%.4f"|format(m.bl) }}</td>
           <td>{{ "%.4f"|format(m.v1) }}</td>
-          <td>{{ "%.4f"|format(m.v2) if m.v2 else 'Pending' }}</td>
           <td>{{ "%.4f"|format(m.i5) }}</td>
+          <td style="color:var(--yellow);">{{ "%.4f"|format(m.combined) if m.combined else '...' }}</td>
           <td class="{{ m.cls }}">{{ m.delta }}</td>
         </tr>
       {% endfor %}
@@ -533,6 +610,19 @@ HTML = r"""
 <div id="tab-changes" class="tab-content">
   <div class="card">
     <h2>代码修改历史</h2>
+
+    <div class="change" style="border-left-color: var(--green);">
+      <div class="meta">Git 实时状态（每 8 秒刷新）</div>
+      <div><strong>分支:</strong> <span id="git-branch">{{ project_changes.branch if project_changes else 'N/A' }}</span></div>
+      <div><strong>最新提交:</strong> <span id="git-latest">{{ (project_changes.latest_commit ~ ' · ' ~ project_changes.latest_subject) if project_changes and project_changes.latest_commit != 'N/A' else 'N/A' }}</span></div>
+      <div><strong>提交时间:</strong> <span id="git-latest-time">{{ project_changes.latest_time if project_changes else 'N/A' }}</span></div>
+      <div><strong>未提交改动:</strong> <span id="git-change-count">{{ project_changes.changed_count if project_changes else 0 }}</span> 个文件</div>
+      <div style="margin-top:6px; color:var(--dim);">最近提交:</div>
+      <pre id="git-recent-commits">{% if project_changes and project_changes.recent_commits %}{{ project_changes.recent_commits|join('\n') }}{% else %}暂无{% endif %}</pre>
+      <div style="margin-top:6px; color:var(--dim);">当前改动文件:</div>
+      <pre id="git-changed-files">{% if project_changes and project_changes.changed_files %}{{ project_changes.changed_files|join('\n') }}{% else %}工作区干净{% endif %}</pre>
+    </div>
+
     {% for c in changes %}
     <div class="change">
       <div class="meta">{{ c.time }} · {{ c.file }}</div>
@@ -625,6 +715,38 @@ function renderTaskProgress(task) {
   }
 }
 
+function renderProjectChanges(git) {
+  if (!git) return;
+
+  const branch = document.getElementById('git-branch');
+  if (branch) branch.textContent = git.branch || 'N/A';
+
+  const latest = document.getElementById('git-latest');
+  if (latest) {
+    const commit = git.latest_commit || 'N/A';
+    const subject = git.latest_subject || '';
+    latest.textContent = commit === 'N/A' ? 'N/A' : `${commit} · ${subject}`;
+  }
+
+  const latestTime = document.getElementById('git-latest-time');
+  if (latestTime) latestTime.textContent = git.latest_time || 'N/A';
+
+  const changeCount = document.getElementById('git-change-count');
+  if (changeCount) changeCount.textContent = String(git.changed_count || 0);
+
+  const recent = document.getElementById('git-recent-commits');
+  if (recent) {
+    const lines = (git.recent_commits && git.recent_commits.length) ? git.recent_commits.join('\n') : '暂无';
+    recent.textContent = lines;
+  }
+
+  const changed = document.getElementById('git-changed-files');
+  if (changed) {
+    const lines = (git.changed_files && git.changed_files.length) ? git.changed_files.join('\n') : '工作区干净';
+    changed.textContent = lines;
+  }
+}
+
 function tickRefresh() {
   fetch('/api/refresh')
     .then(r => r.json())
@@ -637,6 +759,7 @@ function tickRefresh() {
       renderGpu(d.gpus || [], d.gpu_raw || '');
       renderProcesses(d.processes || []);
       renderTaskProgress(d.task_progress || null);
+      renderProjectChanges(d.project_changes || null);
     })
     .catch(() => {});
 }
@@ -654,6 +777,7 @@ def build_metrics_table():
     bl = REFERENCE_METRICS["baseline_v2"]
     v1 = REFERENCE_METRICS["innovation_4_v1"]
     i5 = REFERENCE_METRICS["innovation_5_v2"]
+    combined = REFERENCE_METRICS.get("combined_4_5")
     keys = [
         ("overall_ssim",     "Overall SSIM ↑",      True),
         ("overall_psnr",     "Overall PSNR ↑",      True),
@@ -666,7 +790,8 @@ def build_metrics_table():
     rows = []
     for key, name, higher_better in keys:
         b, v, i = bl[key], v1[key], i5[key]
-        diff = v - b
+        combined_val = combined[key] if combined else None
+        diff = i - b  # Innov5 vs Baseline
         if higher_better:
             cls = "up" if diff > 0 else "down"
             sign = "+" if diff > 0 else ""
@@ -675,8 +800,8 @@ def build_metrics_table():
             sign = "" if diff < 0 else "+"
         pct = abs(diff / b * 100) if b else 0
         delta_str = f"{sign}{diff:.4f} ({pct:.2f}%)"
-        rows.append({"name": name, "bl": b, "v1": v, "v2": v, "i5": i,
-                      "cls": cls, "delta": delta_str})
+        rows.append({"name": name, "bl": b, "v1": v, "i5": i,
+                      "combined": combined_val, "cls": cls, "delta": delta_str})
     return rows
 
 
@@ -685,6 +810,7 @@ def index():
     with _cache_lock:
         info = _cache["server_info"] or {}
     task_progress = _cache["task_progress"] or {}
+    project_changes = _cache["project_changes"] or {}
     connected = info.get("status") == "connected"
     gpus = parse_gpu(info.get("gpu_raw", ""))
     procs = parse_processes(info.get("proc_raw", ""))
@@ -702,6 +828,7 @@ def index():
         gpus=gpus,
         processes=procs,
         task_progress=task_progress,
+        project_changes=project_changes,
         metrics_table=build_metrics_table(),
         changes=CODE_CHANGES,
     )
@@ -712,6 +839,7 @@ def api_refresh():
     with _cache_lock:
         info = _cache["server_info"] or {}
     task_progress = _cache["task_progress"] or {}
+    project_changes = _cache["project_changes"] or {}
     return jsonify({
         "cpu_raw": info.get("cpu_raw", ""),
         "mem_raw": info.get("mem_raw", ""),
@@ -721,6 +849,7 @@ def api_refresh():
         "last_update": info.get("timestamp", ""),
         "processes": parse_processes(info.get("proc_raw", "")),
     "task_progress": task_progress,
+    "project_changes": project_changes,
     })
 
 
@@ -737,29 +866,31 @@ def api_server_info():
 # ─── 入口 ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--host", default="127.0.0.1")
-    args = parser.parse_args()
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--port", type=int, default=8080)
+  parser.add_argument("--host", default="127.0.0.1")
+  args = parser.parse_args()
 
-    # 启动后台刷新线程
-    t = threading.Thread(target=background_refresh, daemon=True)
-    t.start()
+  # 启动后台刷新线程
+  t = threading.Thread(target=background_refresh, daemon=True)
+  t.start()
 
-    # 先做一次立即刷新
-    print(f"[Dashboard] 正在连接服务器 {SERVER_HOST}:{SERVER_PORT} ...")
-    try:
-        info = fetch_server_info()
-        task_progress = fetch_task_progress()
-        with _cache_lock:
-            _cache["server_info"] = info
-            _cache["gpu_info"] = parse_gpu(info.get("gpu_raw", ""))
-            _cache["processes"] = parse_processes(info.get("proc_raw", ""))
-            _cache["task_progress"] = task_progress
-            _cache["last_update"] = info.get("timestamp")
-        print(f"[Dashboard] 服务器连接成功")
-    except Exception as e:
-        print(f"[Dashboard] 服务器连接失败: {e}")
+  # 启动前立即拉取一次数据
+  print(f"[Dashboard] 正在连接服务器 {SERVER_HOST}:{SERVER_PORT} ...")
+  try:
+    info = fetch_server_info()
+    task_progress = fetch_task_progress()
+    project_changes = fetch_project_changes()
+    with _cache_lock:
+      _cache["server_info"] = info
+      _cache["gpu_info"] = parse_gpu(info.get("gpu_raw", ""))
+      _cache["processes"] = parse_processes(info.get("proc_raw", ""))
+      _cache["task_progress"] = task_progress
+      _cache["project_changes"] = project_changes
+      _cache["last_update"] = info.get("timestamp")
+    print("[Dashboard] 服务器连接成功")
+  except Exception as e:
+    print(f"[Dashboard] 服务器连接失败: {e}")
 
-    print(f"[Dashboard] 启动中: http://{args.host}:{args.port}")
-    app.run(host=args.host, port=args.port, debug=False, threaded=True)
+  print(f"[Dashboard] 启动中: http://{args.host}:{args.port}")
+  app.run(host=args.host, port=args.port, debug=False, threaded=True)

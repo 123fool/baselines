@@ -10,8 +10,8 @@
 ```
 innovation_5/
 ├── README.md
-├── dashboard/
-│   └── app.py                      # 实时监控网页（Flask）
+├── ../dashboard/
+│   └── server_monitor.py           # 统一实时监控网页（Flask）
 ├── src/
 │   ├── region_weights.py           # 区域权重图生成
 │   └── weighted_losses.py          # 加权损失函数
@@ -38,4 +38,10 @@ innovation_5/
 # 在服务器上
 cd /home/wangchong/data/fwz/code/innovation_5
 bash run.sh
+```
+
+统一可视化页面：
+
+```bash
+python ../dashboard/server_monitor.py --port 8080
 ```

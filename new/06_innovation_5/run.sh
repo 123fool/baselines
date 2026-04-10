@@ -81,7 +81,15 @@ start_dashboard() {
     echo ""
     echo "[Step 0] 启动监控面板..."
     pip install flask psutil -q 2>/dev/null || true
-    nohup python "${CODE_DIR}/dashboard/app.py" \
+
+    # Use the single unified dashboard entry.
+    DASHBOARD_SCRIPT="$(cd "$(dirname "$0")/.." && pwd)/dashboard/server_monitor.py"
+    if [ ! -f "${DASHBOARD_SCRIPT}" ]; then
+        echo "  Dashboard script not found, skipping dashboard startup."
+        return 0
+    fi
+
+    nohup python "${DASHBOARD_SCRIPT}" \
         --port 8501 \
         --changelog "${CHANGELOG}" \
         --results_dir "${OUTPUT_DIR}" \

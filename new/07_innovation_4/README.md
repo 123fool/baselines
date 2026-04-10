@@ -3,6 +3,7 @@
 ## Overview
 
 Replace BrLP's fake-3D perceptual loss (2D VGG squeeze + 20% slice sampling) with:
+
 1. **True 3D MedicalNet perceptual loss** — ResNet-10 pretrained on 23 medical imaging datasets
 2. **Laplacian pyramid frequency constraint** — Multi-scale high-frequency preservation
 
@@ -25,8 +26,8 @@ The frequency constraint combats AE over-smoothing by explicitly penalizing loss
 │   └── evaluate_innovation4.py     # Evaluation with region metrics
 ├── configs/
 │   └── train_mci.yaml              # Training configuration
-├── dashboard/
-│   └── app.py                      # Monitoring dashboard (port 8502)
+├── ../dashboard/
+│   └── server_monitor.py           # Unified monitoring dashboard
 ├── run.sh                          # Server run script
 ├── deploy.ps1                      # Windows → server deploy
 ├── changelog.json                  # Auto-updated training log
@@ -35,33 +36,45 @@ The frequency constraint combats AE over-smoothing by explicitly penalizing loss
 
 ## Key Changes vs Baseline
 
-| Component | Baseline | Innovation 4 |
-|-----------|----------|--------------|
-| Perceptual Loss | VGG squeeze, fake-3D, 20% slices | MedicalNet ResNet-10, true 3D |
-| Frequency Loss | None | Laplacian pyramid (3 levels) |
-| Perceptual Weight | 0.001 | 0.001 |
-| Frequency Weight | N/A | 0.01 |
+| Component         | Baseline                         | Innovation 4                  |
+| ----------------- | -------------------------------- | ----------------------------- |
+| Perceptual Loss   | VGG squeeze, fake-3D, 20% slices | MedicalNet ResNet-10, true 3D |
+| Frequency Loss    | None                             | Laplacian pyramid (3 levels)  |
+| Perceptual Weight | 0.001                            | 0.001                         |
+| Frequency Weight  | N/A                              | 0.01                          |
 
 ## Usage
 
 ### Deploy to server
+
 ```powershell
 .\deploy.ps1
 ```
 
 ### Train AE
+
 ```bash
 bash run.sh train
 ```
 
 ### Evaluate
+
 ```bash
 bash run.sh eval
 ```
 
 ### Full pipeline
+
 ```bash
 bash run.sh all
+```
+
+### Unified dashboard
+
+Use the single monitoring page shared across experiments:
+
+```bash
+python ../dashboard/server_monitor.py --port 8080
 ```
 
 ## References

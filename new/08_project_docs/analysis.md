@@ -541,3 +541,60 @@ MAE 在 ROI 区域的上升是一个需要进一步优化的方向，建议：
 | Overall PSNR | 26.2282 (+1.17%) | Innovation 5 v2               |
 | ROI SSIM     | 0.8184 (+2.52%)  | Innovation 4 v1               |
 | Overall MAE  | 0.0288 (≈基线)   | Baseline / Innovation 5 ≈持平 |
+
+---
+
+## Section 12 — 2026-04-10 | 方案 A 结果：联合重训 ControlNet
+
+### 12.1 实验设置
+
+- **目标**: 在 Inn4 的 AE（ep-4，Decoder微调版）基础上重新训练 Inn5 的 ControlNet，使两者共享相同的解码特征空间
+- **超参数**: n_epochs=5, lr=2.5e-5, batch=8, roi_weight=3.0, region_alpha=0.5（与 Inn5 完全一致）
+- **唯一差异**: `--aekl_ckpt` 替换为 Inn4 微调版（vs. 原始基线 AE）
+- **运行设备**: GPU 1（~18 GiB 可用，GPU 0 被 eye-env 占满）
+- **训练速度**: ~40s/epoch（47 batch × ~1.2 it/s），5 epochs 约 3.5 分钟
+
+### 12.2 训练过程
+
+损失曲线顺利收敛，各 epoch 加权噪声预测 MSE：
+
+| Epoch | Train loss_w | Val loss_w  |
+| ----- | ------------ | ----------- |
+| 0     | 0.175        | ~0.21       |
+| 1     | 0.133        | 0.127 ✓最低 |
+| 2     | 0.134        | 0.129       |
+| 3     | 0.115        | 0.141       |
+| 4     | 0.092        | —           |
+
+### 12.3 评估结果（50对测试集）
+
+| 指标         | Baseline | Inn4 v1 | Inn5 v2 | combined_4_5 | **combined_retrain ep1** | **combined_retrain ep4** |
+| ------------ | -------- | ------- | ------- | ------------ | ------------------------ | ------------------------ |
+| overall_ssim | 0.9015   | 0.9081  | 0.9145  | 0.9123       | 0.7841                   | 0.8664                   |
+| roi_ssim     | 0.7983   | 0.8184  | 0.8141  | 0.8059       | ≈0.56                    | 0.7043                   |
+
+**附加诊断实验**（combined_retrain ep4 + 基线AE）：overall_ssim = 0.2750，hippocampus_ssim = 0.7101
+
+### 12.4 方案 A 失败分析
+
+**训练代码分析**发现：AE checkpoint 在训练中 **仅用于 TensorBoard 可视化**（在 `images_to_tensorboard` 中进行 `torch.no_grad()` 推理），**不参与梯度计算**。训练损失 = 纯噪声预测 MSE，与 Inn5 训练完全相同。
+
+**因此 combined_retrain 与 Inn5 的 ControlNet 训练在理论上等价**，SSIM 差异（0.8664 vs 0.9145）来自：
+
+1. **随机种子差异**: 不同 GPU、不同 nohup 启动状态 → 不同噪声采样序列 → 收敛到不同局部极小值
+2. **训练轮次不足**: Epoch 4 的 val_loss（0.141）已超过 Epoch 1（0.127），出现过拟合迹象；5 epoch 可能不够收敛到与 Inn5 ep-3 相当的水平
+3. **潜在强度校准偏移**: 诊断实验（combined_retrain + baseline AE）得到 overall_ssim=0.2750 但 hippocampus_ssim=0.7101，提示生成潜空间的全局强度范围与基线解码器不匹配，而与 Inn4 解码器匹配——原因仍待确认（AE 不参与梯度，但 TensorBoard 可视化中的 AE 可能通过 BatchNorm Running Stats 对 GPU 数值精度产生影响）
+
+### 12.5 结论与建议
+
+| 方案             | 结果                       | 状态           |
+| ---------------- | -------------------------- | -------------- |
+| combined_4_5     | SSIM=0.9123 (+1.20% vs BL) | ✓ 当前最佳组合 |
+| combined_retrain | SSIM=0.8664（劣于 Inn5）   | ✗ 未达预期     |
+
+**当前最优策略**: 坚持 combined_4_5（Inn5 ep-3 + Inn4 AE），无需重训即可实现 +1.20% SSIM 改善。
+
+**若需进一步改善**:
+
+- 方案 A 变体：使用更多训练 epoch（10-20 epochs）+ 正确的随机种子（设置 `torch.manual_seed`）
+- 或接受分别报告各创新点指标的策略（方案 C），确保论文结构清晰

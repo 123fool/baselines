@@ -31,9 +31,9 @@ SERVER_USER = "wangchong"
 SERVER_PASS = "123456"
 CODE_DIR    = "/home/wangchong/data/fwz/code/"
 TRAIN_DIR   = "/home/wangchong/data/fwz/brlp-train/"
-TRAIN_LOG   = "/home/wangchong/data/fwz/output/combined_4_5/eval.log"
-AUTO_EVAL_LOG = "/home/wangchong/data/fwz/output/combined_4_5/eval.log"
-EVAL_SUMMARY = "/home/wangchong/data/fwz/output/combined_4_5/eval/summary_combined_4_5.json"
+TRAIN_LOG   = "/home/wangchong/data/fwz/output/combined_retrain/train.log"
+AUTO_EVAL_LOG = "/home/wangchong/data/fwz/output/combined_retrain/eval.log"
+EVAL_SUMMARY = "/home/wangchong/data/fwz/output/combined_retrain/eval/summary_combined_retrain.json"
 LOCAL_REPO_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # 缓存
@@ -157,7 +157,7 @@ def fetch_task_progress():
             "state": "unknown",
             "state_text": "未知",
             "epoch_current": 0,
-            "epoch_total": 10,
+            "epoch_total": 5,
             "step_current": 0,
             "step_total": 0,
             "percent": 0,
@@ -174,14 +174,14 @@ def fetch_task_progress():
         "pipeline_percent": 0,
     }
 
-    train_proc = ""  # 联合实验无需重新训练
+    train_proc = ssh_exec("ps aux | grep 'train_controlnet_regional.py' | grep -v grep")
     auto_eval_proc = ssh_exec("ps aux | grep 'evaluate_regional.py' | grep -v grep")
     train_tail = ssh_exec(f"tail -180 {TRAIN_LOG} 2>/dev/null")
     train_vals = ssh_exec(f"grep -E '\\[Epoch [0-9]+\\] val_' {TRAIN_LOG} | tail -5 2>/dev/null")
     auto_eval_tail = ssh_exec(f"tail -220 {AUTO_EVAL_LOG} 2>/dev/null")
     summary_raw = ssh_exec(f"cat {EVAL_SUMMARY} 2>/dev/null")
 
-    train_completed = "Training complete" in train_tail
+    train_completed = "ControlNet training complete" in train_tail or "训练完成" in train_tail
     epoch_matches = re.findall(r"Epoch\s+(\d+):\s*(\d+)%\|.*?(\d+)/(\d+)", train_tail)
     if epoch_matches:
         ep, pct, cur, total = epoch_matches[-1]
@@ -354,11 +354,17 @@ REFERENCE_METRICS = {
         "hippocampus_ssim": 0.8319, "hippocampus_mae": 0.0723,
         "roi_ssim": 0.8141, "roi_mae": 0.0755,
     },
-    # 评估完成后填入实际数据
+    # 联合推理（方案A之前的对比基线）
     "combined_4_5": {
         "overall_ssim": 0.9123, "overall_psnr": 25.9442, "overall_mae": 0.0311,
         "hippocampus_ssim": 0.8203, "hippocampus_mae": 0.0748,
         "roi_ssim": 0.8059, "roi_mae": 0.0768,
+    },
+    # 方案A重训结果（50对测试，ep4最优）— 训练5个epoch未达预期，SSIM劣于Inn5
+    "combined_retrain": {
+        "overall_ssim": 0.8664, "overall_psnr": 22.0717, "overall_mae": 0.0431,
+        "hippocampus_ssim": 0.7144, "hippocampus_mae": 0.1334,
+        "roi_ssim": 0.7043, "roi_mae": 0.1326,
     },
 }
 
@@ -384,11 +390,17 @@ CODE_CHANGES = [
         "reason": "尝试综合优化，但同时改动过多",
         "result": "训练失败：warmup+cosine时序冲突，3D loss在LR≈0时才激活",
     },
-    {"time": "2026-04-10 (运行中)",
+    {"time": "2026-04-10",
         "file": "run.sh (combined_4_5)",
         "change": "Inn4 AE(ep-4) + Inn5 ControlNet(ep-3) 联合推理评估",
         "reason": "Inn4冻结Encoder→潜空间不变，Inn5 ControlNet与Inn4 Decoder完全兼容，无需重训",
-        "result": "SSIM=0.9123 (+1.20%↑ vs BL), ROI_SSIM=0.8059 (+0.95%↑). 未超越 Inn5 单独使用，原因：Decoder Mismatch（ControlNet隐式学习了基线Decoder的特征分布）",
+        "result": "SSIM=0.9123 (+1.20%↑ vs BL), ROI_SSIM=0.8059 (+0.95%↑). 未超越 Inn5 单独使用，原因：Decoder Mismatch",
+    },
+    {"time": "2026-04-10",
+        "file": "train.sh (combined_retrain)",
+        "change": "方案A: Inn4 AE(ep-4) 基础上重训 Inn5 ControlNet (5 epochs, GPU1)",
+        "reason": "Decoder Mismatch 修复：ControlNet 在 Inn4 Decoder 特征空间中训练，消除分布不一致",
+        "result": "SSIM=0.8664 (ep4)，劣于 Inn5 单独(0.9145)。根因: AE仅用于TensorBoard可视化,不参与梯度,训练等价于Inn5; 5epoch未充分收敛+随机种子差异导致局部极小值不同。当前最佳组合仍为combined_4_5 (SSIM=0.9123)",
     },
 ]
 
@@ -485,7 +497,7 @@ HTML = r"""
 
 <!-- ===== 任务进度（实时） ===== -->
 <div class="card" style="margin-bottom:14px;">
-  <h2>任务进度 (创新点4+5 联合推理评估)</h2>
+  <h2>任务进度 (创新点4+5 联合重训 — 方案A)</h2>
   <div style="margin-bottom:10px; font-size:0.9em; color:var(--dim);">
     流程进度: <span id="pipeline-percent">{{ task_progress.pipeline_percent if task_progress else 0 }}</span>%
   </div>

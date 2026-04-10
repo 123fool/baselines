@@ -1,9 +1,16 @@
 # 聊天纪要（2026-04-10）
 
 ## 说明
+
 本文件用于将本阶段与 Copilot 的沟通结果沉淀到仓库，便于后续复现与协作。
 
+### 完整原始聊天记录
+
+- 本次会话完整原始记录（jsonl）已存档：`new/00_chat_records/full_logs/chat_full_2026-04-10_d8e3ee13.jsonl`
+- 来源：VS Code workspaceStorage 的 `chatSessions/d8e3ee13-c89c-4d80-9722-1480745e572d.jsonl`
+
 ## 关键结论
+
 1. 已确认 `yuxunlian` 目录中的文件是 BrLP 作者提供的可用预训练资产：
    - `autoencoder.pth`：自编码器权重
    - `latentdiffusion.pth`：扩散 UNet 权重
@@ -20,10 +27,12 @@
    - 改 Autoencoder：通常需要从 AE 开始，连同后续 latent 提取、UNet、ControlNet 一并重跑。
 
 ## 研究组织产出（先前会话）
+
 1. 在 `new/` 下已形成多份研究文档（基线评估、文献综述、analysis 评审、路线图等）。
 2. 在 `参考/` 下按 5 个创新点建立了文献与代码索引目录。
 
 ## 下一步建议
+
 1. 先确定本轮优先创新点（建议从风险最低的损失函数/区域加权类改动入手）。
 2. 根据改动类型应用最小重训策略，节省训练成本。
 3. 每次实验固定一个变量，记录配置、权重版本与指标，便于回溯。

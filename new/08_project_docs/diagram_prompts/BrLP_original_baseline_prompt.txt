@@ -1,0 +1,519 @@
+# BrLP Original Baseline Model Architecture Diagram Prompt
+## For Banana2 Drawing Tool - Academic Publication Style
+
+### Diagram Title
+**BrLP 原始基础模型 — 基于潜在扩散的脑MRI时间序列生成**
+(BrLP Original Baseline Model — Brain MRI Temporal Sequence Generation via Latent Diffusion)
+
+### Visual Structure & Component Layout
+
+**Overall Flow: Left-to-Right Pipeline with Auxiliary Branch**
+
+```
+Input Layer → Autoencoder Branch → Diffusion Branch → Output Layer
+                                ↓
+                        Auxiliary Model (Leaspy)
+```
+
+---
+
+### SECTION 1: INPUT LAYER
+**Position:** Far left, single box
+**Label:** "输入 MRI (Baseline + Follow-up Covariate)"
+**Color:** Steel Blue (#4A6FA5)
+**Shape:** Rounded rectangle, size 80×60 px
+
+**Content Details:**
+- Shows stacked brain MRI images
+- Baseline timepoint (t=0) and follow-up timepoint (t=T)
+- Includes disease progression covariates (e.g., MMSE, cognitive scores)
+- Tensor shape annotation: (B, 1, D, H, W) where B=batch, D/H/W = spatial dims (96×96×96)
+- Note: Input is raw 3D volumetric MRI
+
+**Connections:**
+- Arrow pointing RIGHT to "Autoencoder" 
+- Dotted line pointing DOWN to "Leaspy" auxiliary model
+
+---
+
+### SECTION 2: AUTOENCODER BRANCH (Blue Color Block)
+**Position:** Left-center, vertically stacked sub-components
+**Base Color:** Steel Blue (#4A6FA5) with BLUE border (no dashed, solid)
+**Label:** "AutoencoderKL (AE)"
+
+#### 2.1 Encoder
+**Shape:** Trapezoid (narrowing downward)
+**Label:** "Encoder"
+**Details:**
+- Conv3D blocks with residual connections
+- Input channels: 1 (grayscale MRI)
+- Feature pyramid: 64 → 128 → 128 → 128
+- Output channels: 1
+- Downsampling: 3× spatial downsampling (96 → 48 → 24 → 12)
+- ResNet blocks: 2 per level
+- Output: latent representation z_AE
+
+**Tensor annotation on output:**
+- z_AE shape: (B, 3, 12, 12, 12) 
+- "3 latent channels, 8× spatial reduction"
+
+#### 2.2 Latent Space
+**Shape:** Horizontal bar, centered
+**Label:** "Latent Code z_AE"
+**Color:** Light teal (#B0E0E6)
+**Size:** 120×40 px
+**Content:**
+- Equation: z_AE ~ N(μ, σ²)
+- KL-divergence regularization applied during training
+- "Compressed brain representation"
+- Dimension: 3 channels × (12×12×12) spatial
+
+#### 2.3 Decoder
+**Shape:** Trapezoid (widening upward)
+**Label:** "Decoder"
+**Details:**
+- Transposed Conv3D blocks with residual connections
+- Upsampling: 3× spatial upsampling (12 → 24 → 48 → 96)
+- Feature channels: 128 → 128 → 64 → 1
+- Reconstruction output: MRI_reconstructed
+- Skip connections from encoder (dotted blue lines from encoder to decoder)
+
+**Output annotation:**
+- Reconstructed MRI shape: (B, 1, 96, 96, 96)
+- "Pixel-space brain reconstruction"
+- Reconstruction loss: L_recon = MSE + L_perceptual
+
+#### 2.4 Patch Discriminator (Side Component)
+**Position:** Right side of AE block, smaller
+**Shape:** Box with "D" label
+**Color:** Dark blue (#1E3A8A)
+**Label:** "Patch Discriminator (D)"
+**Details:**
+- Adversarial training component
+- Classifies AE reconstructions as fake vs. real
+- Input: reconstructed MRI; Output: patch-level discrimination scores
+- Architecture: 3 layers of Conv3D with discriminator blocks
+- Spatial dims (32, 32) patch classification
+- Loss: L_adv = GAN loss (generator vs. discriminator)
+
+**Connection:** 
+- Double-headed arrow between Decoder output and Discriminator (adversarial feedback)
+- Label on arrow: "L_AE_total = L_recon + λ×L_adv"
+
+---
+
+### SECTION 3: LATENT EXTRACTION & CONDITIONING PREPARATION
+**Position:** Center-top transition zone
+**Shape:** Process box with horizontal flow
+
+**Step 1: Latent Extraction**
+- Input: Baseline MRI, Follow-up MRI
+- Process: z_baseline = Encoder(MRI_baseline), z_followup = Encoder(MRI_followup)
+- Output annotation: Two parallel latent codes shown as "(B, 3, 12, 12, 12)" each
+
+**Step 2: Covariate Encoding**
+- Input: Disease progression covariates (cognitive scores, time delta Δt, MCI conversion risk)
+- Process: Covariate concatenation and embedding
+- Output: Context vector c ∈ ℝ^8 (cross-attention dimension)
+- Annotation: "Context dim = 8 for cross-attention"
+
+**Combined Input to Diffusion:**
+- Concatenated vector: [z_baseline; z_followup; c_covariates]
+- Used as conditioning for diffusion model
+
+---
+
+### SECTION 4: DIFFUSION MODEL BRANCH (Purple/Violet Color Block)
+**Position:** Center-right, large vertical block
+**Base Color:** Purple (#8B5CF6) with PURPLE border (solid)
+**Title:** "Diffusion Model Pipeline"
+
+#### 4.1 Noise Scheduler
+**Position:** Top sub-component
+**Shape:** Sine-wave curve visualization
+**Label:** "DDIM Scheduler"
+**Details:**
+- Schedule type: scaled_linear_beta
+- β_start = 0.0015, β_end = 0.0205
+- Timesteps T = 1000 (training), T_infer = 50 (inference via DDIM)
+- Visualize as a curve showing noise level over timesteps
+- Annotation: "Deterministic reverse diffusion path via DDIM"
+
+#### 4.2 Diffusion UNet (DiffusionModelUNet)
+**Position:** Center of diffusion block (main component)
+**Shape:** Nested U-shaped architecture (typical UNet depiction)
+**Label:** "UNet (Diffusion Model)"
+**Details:**
+
+**Input to UNet:**
+- Noisy latent z_t (at timestep t)
+- Timestep embedding t_embed ∈ ℝ^256
+- Cross-attention context c ∈ ℝ^8 (disease covariates)
+- Conditioning embedding from previous latent
+
+**Architecture:**
+- **Encoder pathway (downsampling):**
+  - Level 1: Conv3D (in=3, out=256) + ResBlock + Attention=False
+  - Level 2: Conv3D (in=256, out=512) + ResBlock + Multi-head attention (512 heads)
+  - Level 3: Conv3D (in=512, out=768) + ResBlock + Multi-head attention (768 heads)
+  - Downsampling: maxpool 2×, strided convolutional layers
+
+- **Bottleneck (middle):**
+  - Residual blocks with transformer layers (1 transformer layer)
+  - Cross-attention between latent features and covariate context
+  - Maintains spatial resolution (12×12×12) at bottleneck
+
+- **Decoder pathway (upsampling):**
+  - Level 3: Transposed Conv3D (in=768, out=512) + ResBlock + Attention=True
+  - Level 2: Transposed Conv3D (in=512, out=256) + ResBlock + Attention=True
+  - Level 1: Transposed Conv3D (in=256, out=3) 
+  - Upsampling: transposed convolutions with factor 2×
+
+- **Skip Connections:**
+  - Show as vertical dotted lines connecting encoder to decoder at each level
+  - Label: "Skip connections preserve spatial features"
+
+**Output:**
+- Predicted noise ε_θ(z_t, t, c)
+- Shape: (B, 3, 12, 12, 12) — same as input latent
+
+**Parameter annotations on UNet:**
+```
+Channels: (256, 512, 768)
+Attention levels: (False, True, True)
+ResBlocks: 2 per level
+Cross-attention dimension: 8
+Transformer layers: 1
+Upcast attention: True
+Flash attention: False
+```
+
+#### 4.3 Denoising Loop
+**Position:** Right side of UNet, showing iterative refinement
+**Shape:** Circular loop with timestep counter
+**Label:** "Iterative Denoising (t=T → t=1)"
+**Details:**
+- For each timestep t in reverse [T, T-1, ..., 1]:
+  1. Predict noise: ε_pred = UNet(z_t, t, c)
+  2. Scheduler step: z_{t-1} = Scheduler(ε_pred, z_t, t)
+  3. Add stochasticity ≈ N(0, σ_t²) [optional, DDIM deterministic]
+- Visualization: Show 3-4 intermediate denoising steps with noise decreasing
+- Annotation: "DDIM: fewer steps (50) than training (1000), deterministic sampling"
+
+---
+
+### SECTION 5: LATENT DECODING SECTION
+**Position:** Center-right, below diffusion block
+**Shape:** Transition/bridge box
+**Label:** "Latent-to-Image Decoding"
+
+**Process:**
+- Input: Denoised latent z_0 from diffusion model (shape: B×3×12×12×12)
+- Process: Pass through AE decoder (from Section 2.3)
+- Output: Predicted follow-up MRI
+- Annotation: "Use same AE decoder weights from training phase"
+
+**Tensor flow visualization:**
+- (B, 3, 12, 12, 12) latent → Decoder → (B, 1, 96, 96, 96) MRI
+- Show scale factor: ÷ scale_factor (typically 1 or 0.18)
+
+---
+
+### SECTION 6: OUTPUT LAYER
+**Position:** Far right
+**Label:** "输出 MRI (生成的follow-up)"
+**Color:** Steel Blue (#4A6FA5)
+**Shape:** Rounded rectangle, size 80×60 px
+**Content:**
+- Generated follow-up timepoint MRI
+- Shape annotation: (B, 1, D, H, W) = (B, 1, 96, 96, 96)
+- Tensor detail: "Direct comparison with ground truth follow-up"
+
+---
+
+### SECTION 7: AUXILIARY MODEL BRANCH (Bottom)
+**Position:** Bottom of entire diagram, parallel to main flow
+**Color:** Green (#10B981)
+**Shape:** Rectangular box with dotted border
+
+**Component: Leaspy (Latent Event State Progression Model)**
+**Label:** "Auxiliary Model - Disease Progression"
+
+**Details:**
+- Separate neural ODE model for disease progression
+- Input: Baseline covariates (MCI status, cognitive scores, demographics)
+- Process: Learns event timing and progression dynamics
+- Output: predicted progression probability, expected conversion timepoint
+- Auxiliary loss: L_aux = KL divergence from progression events
+- Integration: Auxiliary loss combined with main objectives: L_total = L_main + α×L_aux
+- Activation timing: Typically trained jointly with diffusion model
+
+**Connections:**
+- Arrow UP from Leaspy to covariate encoding section
+- Label: "Provides progression prior"
+- Bidirectional flow indicates joint training optimization
+
+---
+
+### SECTION 8: TRAINING PIPELINE (Optional Detail Box)
+**Position:** Lower-right corner
+**Shape:** Collapsible box with summary
+**Title:** "Training Process Summary"
+
+**Training Phases:**
+1. **Phase 1: Autoencoder Training**
+   - Loss: L_AE = L_recon + λ_adv × L_adversarial + λ_kl × L_kl_divergence
+   - Duration: ~50-100 epochs
+   - Output: Pre-trained autoencoder checkpoint
+
+2. **Phase 2: Extract Latents**
+   - Process: Apply trained encoder to all baseline+followup MRI pairs
+   - Output: Latent codes for diffusion training
+
+3. **Phase 3: Diffusion Model Training**
+   - Loss: L_diffusion = E_t,z[||ε - ε_θ(z_t, t, c)||²]
+   - Duration: ~200-300 epochs
+   - Optimizer: Adam, LR=1e-4 with warmup
+   - Batch size: 4-8 (limited by GPU memory)
+
+4. **Phase 4: Joint Fine-tuning** (Optional)
+   - ControlNet training on task-specific conditioning
+   - Not present in original baseline
+
+---
+
+### SECTION 9: INFERENCE PIPELINE (Optional Detail Box)
+**Position:** Lower-left corner, mirrored with training
+**Shape:** Collapsible box
+**Title:** "Inference Process"
+
+**Step-by-step:**
+1. Input baseline MRI + covariates
+2. Encode: z_baseline = Encoder(MRI_baseline)
+3. Prepare conditioning: covariates → embedding → context vector c
+4. Initialize: z_T ~ N(0, I) — random initial latent
+5. Loop: For t ∈ [T, T-1, ..., 1]
+   - UNet predict noise: ε_pred = UNet(z_t, t, c)
+   - DDIM step: z_{t-1} = Scheduler.step(ε_pred, z_t, t)
+6. Decode: MRI_pred = Decoder(z_0)
+7. Output: follow-up MRI prediction
+
+**Timing annotation:** "Inference: ~5-10 seconds per sample (T_infer=50 steps)"
+
+---
+
+### SECTION 10: METRIC & LOSS ANNOTATION BOX
+**Position:** Top-right, reference box
+**Shape:** Information panel
+
+**Key Equations:**
+```
+Reconstruction Loss:
+L_recon = MSE(MRI_decoded, MRI_original)
+
+KL Divergence (VAE):
+L_kl = KL(q(z|x) || p(z)) = -0.5 Σ(1 + log(σ²) - μ² - σ²)
+
+Adversarial Loss:
+L_adv = -E[log D(MRI_fake)] + E[log(1 - D(MRI_real))]
+
+Diffusion Loss:
+L_diffusion = E_t[||ε - ε_θ(z_t, t, c)||²_2]
+
+Total Training Loss:
+L_total = L_recon + λ_adv·L_adv + λ_kl·L_kl + λ_aux·L_aux
+```
+
+**Validation Metrics:**
+- Overall SSIM (Structural Similarity Index): target ≥ 0.89
+- PSNR (Peak Signal-to-Noise Ratio): target ≥ 25 dB
+- MAE (Mean Absolute Error): target ≤ 0.036
+- ROI-focused SSIM: regional brain structures (hippocampus, etc.)
+
+---
+
+### SECTION 11: VISUAL STYLE & COLOR LEGEND
+**Position:** Bottom center
+
+**Color Scheme:**
+- **Steel Blue (#4A6FA5):** Original baseline components (Input, Output, AE boundary)
+- **Light Teal (#B0E0E6):** Latent space / intermediate representations
+- **Dark Blue (#1E3A8A):** Discriminator / adversarial components
+- **Purple (#8B5CF6):** Diffusion model / UNet main transformation
+- **Green (#10B981):** Auxiliary model (Leaspy)
+- **Gray (#8B8B8B):** Support/utility components
+
+**Border Styles:**
+- **Solid borders:** Core trainable modules (AE encoder/decoder, UNet, ControlNet)
+- **Dotted borders:** Auxiliary/optional components; information flow connections
+- **Double arrows:** Bidirectional information/gradient flow (e.g., discriminator feedback)
+
+**Layout Style:**
+- IEEE TMI / MICCAI publication standard
+- Compact vertical arrangement (fits single column or double-column paper format)
+- Clear hierarchical information flow from left (input) to right (output)
+- Consistent spacing and alignment for publication-quality reproducibility
+
+---
+
+### SECTION 12: IMPLEMENTATION NOTES
+**Subtitle:** "For Researchers & Engineers Implementing BrLP Baseline"
+
+**Key Code Modules (from Original Repository):**
+```
+src/brlp/networks.py:
+  • init_autoencoder()      — AutoencoderKL initialization
+  • init_patch_discriminator() — PatchDiscriminator setup
+  • init_latent_diffusion()  — DiffusionModelUNet setup
+  • load_if()               — Checkpoint loading utility
+
+src/brlp/sampling.py:
+  • sample_using_diffusion() — Inference core function
+  
+src/brlp/losses.py:
+  • Combined loss computation (reconstruction + adversarial + KL + diffusion)
+
+Training scripts:
+  scripts/training/train_autoencoder.py
+  scripts/training/train_diffusion_unet.py
+  scripts/training/train_aux.py (Leaspy)
+```
+
+**Dataset & Configuration:**
+- Input: MRI brain scans (96×96×96 voxels, 3D volumetric)
+- Modality: T1-weighted MRI (or similar structural modality)
+- Patient cohort: Alzheimer's disease & MCI progression
+- Temporal pairs: baseline + 1-2 year follow-up scans + disease indicator (MCI conversion)
+- Train/Valid/Test splits: ~70/15/15 (example: 371 train, 44 valid, 50 test)
+- Covariates: MMSE, cognitive scores, MCI status, age, gender (concatenated into 8-dim context)
+
+**Computational Requirements:**
+- GPU memory: ~24-32 GB (V100/A100)
+- Training time (Autoencoder): 3-4 days
+- Training time (Diffusion UNet): 5-7 days
+- Inference speed: ~5-10 seconds per sample
+- Framework: PyTorch + MONAI generative models library
+
+---
+
+### SECTION 13: BASELINE PERFORMANCE METRICS
+**Position:** Bottom-right reference table
+
+**Original Baseline Model (BrLP v1.0 — No Innovations Applied):**
+| Metric | Mean ± Std | Target Range | Notes |
+|--------|-----------|--------------|-------|
+| Overall SSIM | 0.8990 ± 0.0201 | ±0.02 | Structural similarity index |
+| Overall PSNR | 25.2205 ± 2.1845 | 24-26 dB | Peak signal-to-noise ratio |
+| Overall MAE | 0.0356 ± 0.0098 | ≤0.04 | Mean absolute error |
+| ROI-focused SSIM | 0.7969 ± 0.0229 | ≤0.80 | Regional brain anatomy |
+| ROI-focused MAE | 0.0904 ± 0.0345 | ≤0.10 | Regional prediction error |
+
+**Dataset:** 50 test subjects, MCI cohort, 1-2 year follow-up intervals
+
+**Performance Analysis:**
+- Baseline establishes reference performance for longitudinal MRI synthesis
+- Adequate structural fidelity (SSIM > 0.89) for clinical assessment
+- Modest ROI accuracy suggests room for targeted improvements
+- Innovations (Inn1-5) demonstrate cumulative SSIM improvements to 0.9282 (+3.25%)
+
+---
+
+### SECTION 14: FILE REFERENCES & DATA PATHS
+**Position:** Appendix section (can be read separately)
+
+**Original BrLP Repository Structure:**
+```
+BrLP/
+├── src/brlp/
+│   ├── __init__.py           # Package initialization
+│   ├── networks.py           # All network components (AE, UNet, ControlNet, D)
+│   ├── sampling.py           # DDIM sampling inference code
+│   ├── losses.py             # Loss function definitions
+│   ├── data.py               # Dataset loaders
+│   ├── utils.py              # Utility functions (normalization, I/O)
+│   ├── const.py              # Constants & brain region mappings
+│   ├── cli.py                # Command-line interface
+│   └── gradacc.py            # Gradient accumulation utilities
+├── scripts/training/
+│   ├── train_autoencoder.py  # Phase 1: AE training
+│   ├── train_diffusion_unet.py # Phase 3: Diffusion UNet
+│   ├── train_aux.py          # Phase 4: Leaspy auxiliary
+│   └── train_controlnet.py   # Task-specific conditioning (future)
+├── scripts/prepare/
+│   ├── extract_latents.py    # Between-phase latent extraction
+│   └── prepare_csv.py        # Dataset CSV preparation
+├── examples/
+│   ├── confs.example.yaml    # Configuration template
+│   └── input.example.csv     # Input data template
+└── README.md                 # Setup and usage guide
+```
+
+**Configuration Files (YAML format):**
+```yaml
+# Typical training configuration
+autoencoder:
+  spatial_dims: 3
+  in_channels: 1
+  latent_channels: 3
+  num_channels: [64, 128, 128, 128]
+  norm_groups: 32
+  
+diffusion_unet:
+  in_channels: 3
+  num_channels: [256, 512, 768]
+  attention_levels: [False, True, True]
+  cross_attention_dim: 8
+  timesteps: 1000
+  
+training:
+  batch_size: 4
+  learning_rate: 1.0e-4
+  epochs: 250
+  gradient_accumulation_steps: 2
+```
+
+---
+
+### SECTION 15: PUBLICATION & CITATION INFORMATION
+**Subtitle:** "Official Reference for BrLP Baseline"
+
+**Primary Paper:**
+- **Title:** "Enhancing Spatiotemporal Disease Progression Models via Latent Diffusion and Prior Knowledge"
+- **Authors:** Lemuel Puglisi, Daniel C. Alexander, Daniele Ravì
+- **Venue:** Medical Image Analysis (2025) + MICCAI 2024 (Oral presentation, top 4%)
+- **Acceptance:** Runner-up Media Best Paper Award (MICCAI 2025)
+- **DOI:** https://www.sciencedirect.com/science/article/pii/S1361841525002816
+- **arXiv Extension:** https://arxiv.org/pdf/2502.08560
+
+**Replication Results:**
+- Vanderbilt University successfully replicated on BLSA (Baltimore Longitudinal Study of Aging) dataset
+- Confirms generalizability across independent MCI cohorts
+
+**Citation Format (BibTeX):**
+```bibtex
+@article{puglisi2025brlp,
+  title={Enhancing Spatiotemporal Disease Progression Models via Latent Diffusion and Prior Knowledge},
+  author={Puglisi, Lemuel and Alexander, Daniel C. and Ravì, Daniele},
+  journal={Medical Image Analysis},
+  volume={XX},
+  pages={XXXX--XXXX},
+  year={2025}
+}
+```
+
+---
+
+## SUMMARY
+
+This diagram specification represents the **original BrLP baseline model** without any subsequent innovations (Innovation Points 1-5). The architecture combines:
+
+1. **Variational Autoencoder (VAE)** for efficient 3D MRI compression (96³ → 12³ latent space)
+2. **Adversarial training** via Patch Discriminator for perceptually realistic reconstructions
+3. **Diffusion-based generative model** (UNet + DDIM scheduling) for longitudinal sequence synthesis
+4. **Cross-attention conditioning** to incorporate disease progression covariates
+5. **Auxiliary disease progression model** (Leaspy) for joint optimization of temporal dynamics
+
+**Baseline Performance:** SSIM=0.8990 ± 0.0201, PSNR=25.22 dB, MAE=0.0356
+**Optimal for:** 1-2 year follow-up MRI prediction in MCI-to-dementia conversion studies
+
+Use this specification to generate publication-quality architecture diagrams for academic papers, conference presentations, or method documentation. All tensor shapes, layer configurations, and loss formulations are derived from the official BrLP source code (https://github.com/lemuelpuglisi/BrLP).

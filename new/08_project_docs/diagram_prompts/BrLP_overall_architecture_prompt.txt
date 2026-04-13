@@ -1,0 +1,166 @@
+Create a clean academic architecture diagram for a paper figure, white background, vector style, English labels only, high readability, horizontal layout (left to right), showing the complete pipeline of an improved BrLP (Brain Latent Progression) framework for MCI longitudinal brain MRI prediction.
+
+Title: Improved BrLP Framework for MCI Brain MRI Longitudinal Prediction
+
+Style:
+- scientific paper figure (suitable for IEEE TMI / Medical Image Analysis / MICCAI)
+- minimal and professional
+- color palette: blue for main pipeline, teal for Innovation 1, orange for Innovation 2 (BTR), green for Innovation 4 (AE improvements), purple for Innovation 5 (region weighting)
+- rounded boxes, thin arrows, clear spacing
+- no photorealism, no decorative background
+- dashed borders for innovation modules to distinguish from baseline components
+- small "star" or "new" badges on innovation modules
+
+The diagram should show the following pipeline from left to right:
+
+=== TOP ROW: TRAINING / INFERENCE PIPELINE ===
+
+1. Input block (leftmost):
+- label: Baseline MRI Scan (t₁)
+- tensor shape: x_A ∈ ℝ^(1×120×144×120)
+- visualize as a small 3D brain volume icon
+- annotate: 3D T1-weighted MRI
+
+2. Improved AutoEncoder (green dashed border — Innovation 4 & 5):
+- label: Improved 3D AutoEncoder
+- sub-blocks inside:
+  a. Encoder (frozen):
+     label: Encoder
+     annotate: frozen weights, preserves latent space compatibility
+  b. arrow down to latent space:
+     label: z_A ∈ ℝ^(3×15×18×15)
+     annotate: baseline latent representation
+  c. Decoder (fine-tuned):
+     label: Improved Decoder
+     annotate: fine-tuned with 3D MedicalNet perceptual loss
+- Innovation badge:
+  "Inn. 4: 3D Perceptual Loss"
+  "Inn. 5: Region-Weighted Reconstruction"
+
+3. Latent space processing block:
+- z_A is padded:
+  label: Pad → z_A ∈ ℝ^(3×16×20×16)
+  annotate: zero-pad for UNet compatibility
+
+4. ControlNet conditioning (teal dashed border — Innovation 1):
+- label: Enhanced ControlNet
+- show two inputs merging into ControlNet:
+  a. Spatial condition (upper input):
+     label: Spatial Condition
+     formula: c_spatial = [z_A(3ch) ∥ age_map(1ch)]
+     shape: 4 × 16 × 20 × 16
+     annotate: baseline latent + starting age broadcast
+  b. Cross-attention context (lower input):
+     label: Clinical Context Vector
+     formula: ctx = [age, sex, dx, cortex, hippo, amyg, wm, vent]
+     shape: 8-dim
+     annotate: clinical covariates from auxiliary model (Leaspy)
+- ControlNet output:
+  label: skip connections → UNet
+  annotate: multi-scale conditional features injected into UNet decoder
+- Innovation badge:
+  "Inn. 1: MCI Dynamic Condition Guidance (6ch spatial condition with atrophy rate + ventricle expansion rate)" — show this as a small extension box adding 2 extra channels to give 6ch total
+
+5. Diffusion UNet (center, main blue block):
+- label: 3D Diffusion UNet (DiffusionModelUNet)
+- show internal structure vertically:
+  a. Encoder path (top to bottom):
+     256 → 512 → 768
+     annotate attention: (✗, ✓, ✓)
+  b. Bottleneck: 768
+  c. Decoder path (bottom to top):
+     768 → 512 → 256
+- show skip connections from ControlNet entering at each decoder level
+- show noise schedule:
+  label: DDPM 1000 steps (train) / DDIM 50 steps (inference)
+- input: noisy z_B(t) + timestep t
+- output: predicted noise ε_θ
+
+6. Bidirectional Temporal Regularization (orange dashed border — Innovation 2):
+- position: below or beside the UNet block
+- label: BTR — Bidirectional Temporal Regularization
+- show two parallel loss paths:
+  a. Forward path (A→B):
+     label: L_fwd = MSE(ε_θ, ε)
+     annotate: standard noise prediction (baseline → follow-up)
+  b. Backward path (B→A):
+     label: L_bwd = MSE(ε_θ^rev, ε^rev)
+     annotate: reverse noise prediction (follow-up → baseline)
+     show: z_B as spatial condition, z_A as target
+- Fusion:
+  label: L_total = L_fwd + λ · L_bwd
+  annotate: λ = 0.5, shared ControlNet weights
+- Innovation badge:
+  "Inn. 2: Bidirectional Temporal Regularization"
+
+7. DDIM Sampling block:
+- label: DDIM Sampler (50 steps)
+- input: random noise z_T ~ N(0,I)
+- output: predicted follow-up latent ẑ_B
+- annotate: conditioned on ControlNet features
+
+8. Decoder output (rightmost):
+- label: Improved Decoder
+- input: ẑ_B
+- output: Predicted Follow-up MRI (t₂)
+- tensor shape: x̂_B ∈ ℝ^(1×120×144×120)
+- visualize as a 3D brain volume icon
+- annotate: predicted future brain MRI
+
+=== BOTTOM ROW: AUXILIARY MODEL & DATA FLOW ===
+
+9. Auxiliary model branch (below main pipeline):
+- label: Leaspy Auxiliary Model
+- input: longitudinal clinical data
+- output: predicted covariates at target age
+- annotate: logistic disease course model, separate CN/MCI/AD groups
+- arrow going up to the Clinical Context Vector in step 4
+
+10. Follow-up ground truth (for training only):
+- label: Follow-up MRI (t₂) — Ground Truth
+- show it being encoded by the same Encoder to produce z_B
+- z_B feeds into the forward loss computation
+- annotate: only used during training
+
+=== LEGEND / ANNOTATION BOX ===
+
+11. Bottom-right legend box:
+- Baseline BrLP components: solid blue borders
+- Innovation 1 (MCI Dynamic Condition): teal dashed border
+- Innovation 2 (Bidirectional Temporal Reg.): orange dashed border
+- Innovation 4 (3D Perceptual Loss): green dashed border
+- Innovation 5 (Region-Weighted AE): purple dashed border
+- Frozen weights: gray fill
+- Trainable weights: white fill
+
+Important labels to include:
+- Baseline MRI (t₁)
+- Improved 3D AutoEncoder
+- Encoder (frozen)
+- Improved Decoder
+- Latent Space z_A
+- Enhanced ControlNet
+- Spatial Condition (4ch → 6ch)
+- Clinical Context (8-dim)
+- 3D Diffusion UNet
+- DDPM / DDIM
+- Forward Loss L_fwd
+- Backward Loss L_bwd
+- BTR: L_total = L_fwd + λ·L_bwd
+- DDIM Sampler
+- Predicted Follow-up MRI (t₂)
+- Leaspy Auxiliary Model
+- Skip Connections
+- Innovation 1: MCI Dynamic Condition Guidance
+- Innovation 2: Bidirectional Temporal Regularization
+- Innovation 4: 3D MedicalNet Perceptual Loss
+- Innovation 5: Region-Weighted Reconstruction
+
+Visual emphasis:
+- Main pipeline flow in bold blue arrows (left to right)
+- Innovation modules with distinct colored dashed borders
+- ControlNet skip connections as dotted teal lines entering UNet decoder
+- BTR backward path as orange dashed arrows (reverse direction)
+- Latent space tensors shown as small 3D cuboid icons with shape annotations
+- Keep the figure compact, publication-ready, fitting in a single-column or double-column journal layout
+- The figure should clearly communicate: "We enhance BrLP with 4 innovations targeting condition guidance, temporal consistency, perceptual reconstruction, and region-specific fidelity"

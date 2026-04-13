@@ -69,6 +69,25 @@ MULTI_TP_OUTPUT_DIR  = "/home/wangchong/data/fwz/output/multi_timepoint"
 MULTI_TP_EVAL_LOG    = "/home/wangchong/data/fwz/output/multi_timepoint/eval_multi_tp.log"
 MULTI_TP_SUMMARY     = "/home/wangchong/data/fwz/output/multi_timepoint/summary_multi_timepoint.json"
 
+# ── 借鉴方法验证实验 (Section 21+) ──
+# Method B: Time-Aware Context (替代辅助模型)
+METHOD_B_OUTPUT_DIR  = "/home/wangchong/data/fwz/output/method_b_time_aware"
+METHOD_B_TRAIN_LOG   = "/home/wangchong/data/fwz/output/method_b_time_aware/controlnet/train_time_aware.log"
+METHOD_B_EVAL_LOG    = "/home/wangchong/data/fwz/output/method_b_time_aware/eval/eval_method_b.log"
+METHOD_B_SUMMARY     = "/home/wangchong/data/fwz/output/method_b_time_aware/eval/summary_method_b.json"
+
+# Method C: Identity-Preserving Loss (对比学习)
+METHOD_C_OUTPUT_DIR  = "/home/wangchong/data/fwz/output/method_c_identity"
+METHOD_C_TRAIN_LOG   = "/home/wangchong/data/fwz/output/method_c_identity/controlnet/train_identity.log"
+METHOD_C_EVAL_LOG    = "/home/wangchong/data/fwz/output/method_c_identity/eval"
+METHOD_C_SUMMARY     = "/home/wangchong/data/fwz/output/method_c_identity/eval/summary_method-c-identity.json"
+
+# Method D: Frequency Loss (频域损失)
+METHOD_D_OUTPUT_DIR  = "/home/wangchong/data/fwz/output/method_d_freq"
+METHOD_D_TRAIN_LOG   = "/home/wangchong/data/fwz/output/method_d_freq/controlnet/train_freq.log"
+METHOD_D_EVAL_LOG    = "/home/wangchong/data/fwz/output/method_d_freq/eval"
+METHOD_D_SUMMARY     = "/home/wangchong/data/fwz/output/method_d_freq/eval/summary_method-d-frequency.json"
+
 # 缓存
 _cache = {
     "server_info": None,
@@ -85,6 +104,9 @@ _cache = {
     "combined_progress": None,
     "no_aux_progress": None,
     "multi_tp_progress": None,
+    "method_b_progress": None,
+    "method_c_progress": None,
+    "method_d_progress": None,
 }
 _cache_lock = threading.Lock()
 
@@ -893,6 +915,106 @@ def fetch_multi_tp_progress():
     return progress
 
 
+def fetch_method_progress(method_name, train_log_path, eval_summary_path, train_proc_name):
+    """通用方法进度采集函数（Method B/C/D 共用）。"""
+    progress = {
+        "task_name": method_name,
+        "train": {
+            "state": "unknown",
+            "state_text": "未知",
+            "epoch_current": 0,
+            "epoch_total": 5,
+            "loss_current": None,
+            "best_loss": None,
+            "percent": 0,
+            "log_tail": "",
+        },
+        "eval": {
+            "state": "unknown",
+            "state_text": "未知",
+            "ssim_mean": None,
+            "psnr_mean": None,
+            "mae_mean": None,
+        },
+    }
+
+    # Check training log
+    train_tail = ssh_exec(f"tail -30 {train_log_path} 2>/dev/null")
+    if train_tail and "ERROR" not in train_tail:
+        progress["train"]["log_tail"] = train_tail[-500:]
+
+        # Parse epoch and loss: "[METHOD-X] Epoch N [mode] loss=X.XXXXXX"
+        epoch_matches = re.findall(
+            r"Epoch\s+(\d+)\s+\[(\w+)\]\s+(?:total=|loss=)([\d.]+)", train_tail)
+        if epoch_matches:
+            ep, mode, loss_val = epoch_matches[-1]
+            progress["train"]["epoch_current"] = int(ep)
+            progress["train"]["loss_current"] = float(loss_val)
+            progress["train"]["percent"] = int((int(ep) + 1) / 5 * 100)
+
+        # Check for "best model" saves
+        best_matches = re.findall(r"val_(?:loss|mse)=([\d.]+)", train_tail)
+        if best_matches:
+            progress["train"]["best_loss"] = float(best_matches[-1])
+
+        if "Training complete" in train_tail:
+            progress["train"]["state"] = "completed"
+            progress["train"]["state_text"] = "训练完成"
+            progress["train"]["percent"] = 100
+        else:
+            train_proc = ssh_exec(f"ps aux | grep '{train_proc_name}' | grep -v grep")
+            if train_proc and train_proc.strip() and "ERROR" not in train_proc:
+                progress["train"]["state"] = "running"
+                progress["train"]["state_text"] = "训练中"
+            else:
+                progress["train"]["state"] = "idle"
+                progress["train"]["state_text"] = "未运行"
+    else:
+        progress["train"]["state"] = "idle"
+        progress["train"]["state_text"] = "未运行"
+
+    # Check evaluation summary
+    summary_raw = ssh_exec(f"cat {eval_summary_path} 2>/dev/null")
+    if summary_raw and "ERROR" not in summary_raw and summary_raw.strip().startswith("{"):
+        try:
+            summary_obj = json.loads(summary_raw)
+            metrics = summary_obj.get("metrics", {})
+            progress["eval"]["ssim_mean"] = metrics.get("ssim", {}).get("mean")
+            progress["eval"]["psnr_mean"] = metrics.get("psnr", {}).get("mean")
+            progress["eval"]["mae_mean"] = metrics.get("mae", {}).get("mean")
+            progress["eval"]["state"] = "completed"
+            progress["eval"]["state_text"] = "评估完成"
+        except Exception:
+            pass
+    else:
+        progress["eval"]["state"] = "idle"
+        progress["eval"]["state_text"] = "未评估"
+
+    return progress
+
+
+def fetch_method_b_progress():
+    return fetch_method_progress(
+        "Method B: Time-Aware Context (去辅助模型)",
+        METHOD_B_TRAIN_LOG, METHOD_B_SUMMARY,
+        "method_b_time_aware"
+    )
+
+def fetch_method_c_progress():
+    return fetch_method_progress(
+        "Method C: Identity-Preserving Loss (身份保持损失)",
+        METHOD_C_TRAIN_LOG, METHOD_C_SUMMARY,
+        "method_c_identity"
+    )
+
+def fetch_method_d_progress():
+    return fetch_method_progress(
+        "Method D: Frequency Loss (频域损失)",
+        METHOD_D_TRAIN_LOG, METHOD_D_SUMMARY,
+        "method_d_frequency"
+    )
+
+
 def fetch_project_changes():
     """采集本地仓库最新提交与工作区改动。"""
     info = {
@@ -966,6 +1088,9 @@ def background_refresh():
             combined_progress = fetch_combined_progress()
             no_aux_progress = fetch_no_aux_progress()
             multi_tp_progress = fetch_multi_tp_progress()
+            method_b_progress = fetch_method_b_progress()
+            method_c_progress = fetch_method_c_progress()
+            method_d_progress = fetch_method_d_progress()
             project_changes = fetch_project_changes()
             with _cache_lock:
                 _cache["server_info"] = info
@@ -978,6 +1103,9 @@ def background_refresh():
                 _cache["combined_progress"] = combined_progress
                 _cache["no_aux_progress"] = no_aux_progress
                 _cache["multi_tp_progress"] = multi_tp_progress
+                _cache["method_b_progress"] = method_b_progress
+                _cache["method_c_progress"] = method_c_progress
+                _cache["method_d_progress"] = method_d_progress
                 _cache["project_changes"] = project_changes
                 _cache["last_update"] = info.get("timestamp")
                 _cache["error"] = None
@@ -1053,6 +1181,26 @@ INNOVATION_1_METRICS = {
         "hippocampus_ssim": 0.8073, "hippocampus_mae": 0.0933,
         "amygdala_mae": 0.1044,
         "_note": "50对MCI测试样本, BTR+RLP组合 epoch4 — 已放弃(产生负干扰)",
+    },
+    "no_aux_linear": {
+        "overall_ssim": 0.9268, "overall_psnr": None, "overall_mae": None,
+        "_note": "50对MCI测试样本, BTR ControlNet + Linear体积插值(无辅助模型)",
+    },
+    "no_aux_skip": {
+        "overall_ssim": 0.9240, "overall_psnr": None, "overall_mae": None,
+        "_note": "50对MCI测试样本, BTR ControlNet + Skip体积(zero填充, 无辅助模型)",
+    },
+    "method_b_time_aware": {
+        "overall_ssim": None, "overall_psnr": None, "overall_mae": None,
+        "_note": "Method B: 时间感知context(无脑区体积), 训练中...",
+    },
+    "method_c_identity": {
+        "overall_ssim": None, "overall_psnr": None, "overall_mae": None,
+        "_note": "Method C: 身份保持对比损失 + 时间感知context, 训练中...",
+    },
+    "method_d_frequency": {
+        "overall_ssim": None, "overall_psnr": None, "overall_mae": None,
+        "_note": "Method D: 频域损失 + 时间感知context, 训练中...",
     },
 }
 
@@ -1149,6 +1297,30 @@ CODE_CHANGES = [
         "change": "多时间点连续生成验证 — 4种方法: Direct-Skip/Direct-Linear/Direct-TPN(从基线直接生成多时间点) + Auto-Linear(自回归链式生成); 对拥有3+访视的受试者,从基线生成连续时间点图像并与真实数据对比",
         "reason": "验证模型能否生成时间连续的脑退化序列(3/6/9/12月...); 分析SSIM是否随时间间隔增大而下降; 对比直接生成vs自回归生成策略; 为论文提供纵向生成能力证据",
         "result": "待运行",
+    },
+    {"time": "2026-04-15",
+        "file": "evaluate_enhanced.py (Method A)",
+        "change": "增强评估指标 — 在现有BTR-Linear最佳模型上增加PSNR/MAE/RMSE评估; 借鉴AD-DAE和Forecasting FA的多指标评估方案",
+        "reason": "论文评审要求多维度对比; 仅报告SSIM不足以说明生成质量; PSNR/MAE/RMSE是标配指标",
+        "result": "待运行 — 纯评估，无需重新训练",
+    },
+    {"time": "2026-04-15",
+        "file": "train_time_aware.py (Method B)",
+        "change": "Method B: 时间感知上下文 — 将8维context中的5个脑区体积替换为时间特征(time_delta, age_ratio, baseline_age, diag_change, norm_time); 完全消除对辅助模型的依赖",
+        "reason": "借鉴TADM(MICCAI 2024)和AD-DAE(CMIG 2025); TADM仅用年龄差+认知状态就能建模脑变化; 辅助模型是BrLP最大学术指纹; 线性插值验证(SSIM=0.9268)已表明体积信息非必需",
+        "result": "训练中...",
+    },
+    {"time": "2026-04-15",
+        "file": "train_identity.py (Method C)",
+        "change": "Method C: 身份保持对比损失 — 在MSE基础上增加identity_preserving_loss(起始潜码特征区域约束) + latent_consistency_loss(噪声预测→估计x_0与起始潜码的余弦相似度); λ_id=0.1, λ_con=0.05",
+        "reason": "借鉴IP-LDM(arXiv 2025)的身份保持思路; 显式约束生成图像保持受试者的脑结构特征; BrLP仅通过ControlNet隐式保持身份,缺少显式约束",
+        "result": "训练中...",
+    },
+    {"time": "2026-04-15",
+        "file": "train_frequency.py (Method D)",
+        "change": "Method D: 频域损失 — 在MSE基础上增加frequency_loss(3D FFT对数幅度谱L1) + gradient_smoothness_loss(脑结构均匀区域的梯度平滑约束); λ_freq=0.01, λ_smooth=0.005",
+        "reason": "借鉴Forecasting Future Anatomies(2025)的多尺度结构损失; 标准MSE对所有频率等权处理,但脑萎缩涉及低频(总体积)和高频(皮层褶皱)变化; 频域损失针对性加权",
+        "result": "训练中...",
     },
 ]
 
@@ -1543,6 +1715,84 @@ HTML = r"""
   </div>
   <div style="font-size:0.75em; color:var(--dim); margin-top:8px;">
     目标: 从基线连续生成3/6/9/12月+图像 · 验证时间跨度对SSIM的影响 · 对比直接vs自回归生成
+  </div>
+</div>
+
+<!-- ===== 借鉴方法验证 (Section 21+) ===== -->
+<div class="card" style="margin-bottom:14px; border-left: 3px solid #ff6b9d;">
+  <h2 style="color:#ff6b9d;">📚 借鉴方法验证 (Section 21)</h2>
+  <div style="font-size:0.85em; color:var(--dim); margin-bottom:10px;">
+    基于文献分析(Section 20)的可借鉴方法实现与验证 · 目标SSIM≥0.92 · 完全去除辅助模型
+  </div>
+
+  <!-- Method B: Time-Aware Context -->
+  <div style="margin-bottom:12px; padding:10px; background:rgba(255,107,157,0.08); border-radius:6px;">
+    <div style="font-weight:600; margin-bottom:6px;">
+      🅱️ Method B: 时间感知上下文 (Time-Aware Context)
+      <span id="mb-train-state" class="status-badge status-{{ method_b_progress.train.state if method_b_progress else 'idle' }}">
+        {{ method_b_progress.train.state_text if method_b_progress else '未运行' }}
+      </span>
+    </div>
+    <div style="font-size:0.82em; color:var(--dim);">
+      替代5个脑区体积→时间特征 [time_delta, age_ratio, baseline_age, diag_change, norm_time]
+    </div>
+    <div class="bar-outer" style="margin:6px 0;">
+      <div id="mb-train-bar" class="bar-inner" style="width:{{ method_b_progress.train.percent if method_b_progress else 0 }}%; background:#ff6b9d;"></div>
+      <span id="mb-train-label" class="bar-label">Ep {{ method_b_progress.train.epoch_current if method_b_progress else 0 }}/5 · {{ method_b_progress.train.percent if method_b_progress else 0 }}%</span>
+    </div>
+    <div style="display:flex; gap:12px; font-size:0.82em;">
+      <span>Loss: <span id="mb-loss">{{ "%.6f"|format(method_b_progress.train.loss_current) if method_b_progress and method_b_progress.train.loss_current else 'N/A' }}</span></span>
+      <span>SSIM: <span id="mb-ssim" style="font-weight:600; color:var(--green);">{{ "%.4f"|format(method_b_progress.eval.ssim_mean) if method_b_progress and method_b_progress.eval.ssim_mean else '待评估' }}</span></span>
+      <span>PSNR: <span id="mb-psnr">{{ "%.2f"|format(method_b_progress.eval.psnr_mean) if method_b_progress and method_b_progress.eval.psnr_mean else 'N/A' }}</span></span>
+    </div>
+  </div>
+
+  <!-- Method C: Identity-Preserving -->
+  <div style="margin-bottom:12px; padding:10px; background:rgba(255,107,157,0.08); border-radius:6px;">
+    <div style="font-weight:600; margin-bottom:6px;">
+      🅲 Method C: 身份保持损失 (Identity-Preserving)
+      <span id="mc-train-state" class="status-badge status-{{ method_c_progress.train.state if method_c_progress else 'idle' }}">
+        {{ method_c_progress.train.state_text if method_c_progress else '未运行' }}
+      </span>
+    </div>
+    <div style="font-size:0.82em; color:var(--dim);">
+      MSE + λ_id·L_identity + λ_con·L_consistency · 借鉴IP-LDM(arXiv 2025) · λ_id=0.1 λ_con=0.05
+    </div>
+    <div class="bar-outer" style="margin:6px 0;">
+      <div id="mc-train-bar" class="bar-inner" style="width:{{ method_c_progress.train.percent if method_c_progress else 0 }}%; background:#ff6b9d;"></div>
+      <span id="mc-train-label" class="bar-label">Ep {{ method_c_progress.train.epoch_current if method_c_progress else 0 }}/5 · {{ method_c_progress.train.percent if method_c_progress else 0 }}%</span>
+    </div>
+    <div style="display:flex; gap:12px; font-size:0.82em;">
+      <span>Loss: <span id="mc-loss">{{ "%.6f"|format(method_c_progress.train.loss_current) if method_c_progress and method_c_progress.train.loss_current else 'N/A' }}</span></span>
+      <span>SSIM: <span id="mc-ssim" style="font-weight:600; color:var(--green);">{{ "%.4f"|format(method_c_progress.eval.ssim_mean) if method_c_progress and method_c_progress.eval.ssim_mean else '待评估' }}</span></span>
+      <span>PSNR: <span id="mc-psnr">{{ "%.2f"|format(method_c_progress.eval.psnr_mean) if method_c_progress and method_c_progress.eval.psnr_mean else 'N/A' }}</span></span>
+    </div>
+  </div>
+
+  <!-- Method D: Frequency Loss -->
+  <div style="margin-bottom:12px; padding:10px; background:rgba(255,107,157,0.08); border-radius:6px;">
+    <div style="font-weight:600; margin-bottom:6px;">
+      🅳 Method D: 频域损失 (Frequency Loss)
+      <span id="md-train-state" class="status-badge status-{{ method_d_progress.train.state if method_d_progress else 'idle' }}">
+        {{ method_d_progress.train.state_text if method_d_progress else '未运行' }}
+      </span>
+    </div>
+    <div style="font-size:0.82em; color:var(--dim);">
+      MSE + λ_freq·L_fft + λ_smooth·L_gradient · 借鉴Forecasting FA(2025) · λ_freq=0.01 λ_smooth=0.005
+    </div>
+    <div class="bar-outer" style="margin:6px 0;">
+      <div id="md-train-bar" class="bar-inner" style="width:{{ method_d_progress.train.percent if method_d_progress else 0 }}%; background:#ff6b9d;"></div>
+      <span id="md-train-label" class="bar-label">Ep {{ method_d_progress.train.epoch_current if method_d_progress else 0 }}/5 · {{ method_d_progress.train.percent if method_d_progress else 0 }}%</span>
+    </div>
+    <div style="display:flex; gap:12px; font-size:0.82em;">
+      <span>Loss: <span id="md-loss">{{ "%.6f"|format(method_d_progress.train.loss_current) if method_d_progress and method_d_progress.train.loss_current else 'N/A' }}</span></span>
+      <span>SSIM: <span id="md-ssim" style="font-weight:600; color:var(--green);">{{ "%.4f"|format(method_d_progress.eval.ssim_mean) if method_d_progress and method_d_progress.eval.ssim_mean else '待评估' }}</span></span>
+      <span>PSNR: <span id="md-psnr">{{ "%.2f"|format(method_d_progress.eval.psnr_mean) if method_d_progress and method_d_progress.eval.psnr_mean else 'N/A' }}</span></span>
+    </div>
+  </div>
+
+  <div style="font-size:0.75em; color:var(--dim); margin-top:8px;">
+    来源: TADM(MICCAI 2024) · IP-LDM(arXiv 2025) · Forecasting FA(arXiv 2025) · AD-DAE(CMIG 2025)
   </div>
 </div>
 
@@ -2035,6 +2285,34 @@ function renderMultiTpProgress(data) {
   }
 }
 
+function renderMethodProgress(prefix, data) {
+  if (!data) return;
+  const tp = data.train || {};
+  const ep = data.eval || {};
+  const trainState = document.getElementById(prefix + '-train-state');
+  if (trainState) {
+    trainState.textContent = tp.state_text || '未运行';
+    trainState.className = 'status-badge status-' + (tp.state || 'idle');
+  }
+  const bar = document.getElementById(prefix + '-train-bar');
+  if (bar) bar.style.width = String(tp.percent || 0) + '%';
+  const label = document.getElementById(prefix + '-train-label');
+  if (label) label.textContent = `Ep ${tp.epoch_current || 0}/5 · ${tp.percent || 0}%`;
+  const lossEl = document.getElementById(prefix + '-loss');
+  if (lossEl) lossEl.textContent = tp.loss_current ? tp.loss_current.toFixed(6) : 'N/A';
+  const ssimEl = document.getElementById(prefix + '-ssim');
+  if (ssimEl) {
+    if (ep.ssim_mean) {
+      ssimEl.textContent = ep.ssim_mean.toFixed(4);
+      ssimEl.style.color = ep.ssim_mean >= 0.92 ? 'var(--green)' : ep.ssim_mean >= 0.91 ? 'var(--yellow)' : 'var(--red)';
+    } else {
+      ssimEl.textContent = '待评估';
+    }
+  }
+  const psnrEl = document.getElementById(prefix + '-psnr');
+  if (psnrEl) psnrEl.textContent = ep.psnr_mean ? ep.psnr_mean.toFixed(2) : 'N/A';
+}
+
 function tickRefresh() {
   fetch('/api/refresh')
     .then(r => r.json())
@@ -2053,6 +2331,9 @@ function tickRefresh() {
       renderCombinedProgress(d.combined_progress || null);
       renderNoAuxProgress(d.no_aux_progress || null);
       renderMultiTpProgress(d.multi_tp_progress || null);
+      renderMethodProgress('mb', d.method_b_progress || null);
+      renderMethodProgress('mc', d.method_c_progress || null);
+      renderMethodProgress('md', d.method_d_progress || null);
       renderAiLog(d.ai_operations || []);
       renderProjectChanges(d.project_changes || null);
     })
@@ -2154,6 +2435,9 @@ def index():
     combined_progress = _cache["combined_progress"] or {}
     no_aux_progress = _cache["no_aux_progress"] or {}
     multi_tp_progress = _cache["multi_tp_progress"] or {}
+    method_b_progress = _cache["method_b_progress"] or {}
+    method_c_progress = _cache["method_c_progress"] or {}
+    method_d_progress = _cache["method_d_progress"] or {}
     project_changes = _cache["project_changes"] or {}
     connected = info.get("status") == "connected"
     gpus = parse_gpu(info.get("gpu_raw", ""))
@@ -2181,6 +2465,9 @@ def index():
         combined_progress=combined_progress,
         no_aux_progress=no_aux_progress,
         multi_tp_progress=multi_tp_progress,
+        method_b_progress=method_b_progress,
+        method_c_progress=method_c_progress,
+        method_d_progress=method_d_progress,
         project_changes=project_changes,
         ai_operations=ai_ops,
         metrics_table=build_metrics_table(),
@@ -2200,6 +2487,9 @@ def api_refresh():
     combined_progress = _cache["combined_progress"] or {}
     no_aux_progress = _cache["no_aux_progress"] or {}
     multi_tp_progress = _cache["multi_tp_progress"] or {}
+    method_b_progress = _cache["method_b_progress"] or {}
+    method_c_progress = _cache["method_c_progress"] or {}
+    method_d_progress = _cache["method_d_progress"] or {}
     project_changes = _cache["project_changes"] or {}
     with _ai_ops_lock:
         ai_ops = list(_ai_operations)
@@ -2218,6 +2508,9 @@ def api_refresh():
         "combined_progress": combined_progress,
         "no_aux_progress": no_aux_progress,
         "multi_tp_progress": multi_tp_progress,
+        "method_b_progress": method_b_progress,
+        "method_c_progress": method_c_progress,
+        "method_d_progress": method_d_progress,
         "project_changes": project_changes,
         "ai_operations": ai_ops,
     })

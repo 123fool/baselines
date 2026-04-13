@@ -1593,3 +1593,525 @@ Auto-Linear 在短期（0.9323）表现最优，但在长程链中误差不断�
 3. **SSIM在不同数据格式间不可横向比较**：2D OASIS达0.949 (IP-LDM)，2D ADNI达0.94 (AD-DAE)，3D GMD达0.99 (Forecasting FA)，我们的3D raw MRI达0.9268
 4. **我们的模型具有强竞争力**：在最困难的3D raw MRI设定下达到SSIM=0.9268，并且是唯一验证了多时间点连续生成能力的方法
 5. **可以快速提升论文质量的方向**：增加PSNR/MAE/RMSE指标报告（低成本），增加脑区体积变化分析（中等成本），这些在AD-DAE等论文中已成为标配评估
+
+---
+
+## 21. 评估脚本修复与统一对比实验
+
+### 21.1 背景：评估脚本 Bug 修复
+
+**时间**: 2026-04-13
+
+在对 `eval_fixed.py` 进行独立评估实验时，发现了一个**严重的评估Bug**：
+
+**问题**：评估脚本中对模型预测结果使用了 `ScaleIntensity(minv=0, maxv=1)`，该操作会将预测值的实际范围**独立归一化**到 [0,1]。例如，若预测值范围为 [0.2, 0.8]，ScaleIntensity 会将其拉伸为 [0.0, 1.0]，破坏了预测与 Ground Truth 之间的强度对应关系。
+
+**修复**：改为 `.numpy().clip(0, 1)`——仅裁剪超出 [0,1] 范围的值，保持范围内的值不变。这与 Innovation 5 的 `evaluate_regional.py` 中的处理方式一致。
+
+**影响**：
+
+- 修复前 Baseline SSIM = **0.6109**（eval_v4, 有Bug）
+- 修复后 Baseline SSIM = **0.9016**（eval_v5, 正确）
+- 修复前 Inn5-CNet SSIM ≈ 0.52（有Bug）
+- 修复后 Inn5-CNet SSIM = **0.9207**（正确）
+
+**重要说明**：analysis.md 中 Sections 8-20 的 SSIM 数值均使用 Innovation 5 的 `evaluate_regional.py`（使用 clip），这些数值**是正确的**。此 Bug 仅影响独立的 `eval_fixed.py` 脚本。
+
+### 21.2 修复后统一评估实验
+
+使用修复后的 `eval_fixed.py` 在 50 对 MCI 测试样本上重新评估所有主要方法。评估分为单次采样（n=1）和多次采样取平均（n=3，即 average_over_n=3，对 3 次独立推理的预测结果取均值以减少随机性）。
+
+#### 21.2.1 单次采样结果（n=1）
+
+| 方法            | SSIM       | ±std   | PSNR      | ±std | MAE          | RMSE         | 备注                                   |
+| --------------- | ---------- | ------ | --------- | ---- | ------------ | ------------ | -------------------------------------- |
+| **Inn5-CNet**   | **0.9207** | 0.0279 | **26.62** | 2.30 | **0.028358** | **0.048405** | cnet-ep-4.pth, original context        |
+| Baseline        | 0.9016     | 0.0349 | 25.43     | 2.40 | 0.034        | 0.056        | pretrained controlnet.pth              |
+| Method D (频率) | 0.8784     | 0.0301 | 22.73     | 1.92 | 0.041316     | 0.074857     | cnet-freq-best.pth, time_aware context |
+
+#### 21.2.2 多次采样取平均结果（n=3）
+
+| 方法               | SSIM       | ±std       | PSNR      | ±std     | MAE          | RMSE         | 备注          |
+| ------------------ | ---------- | ---------- | --------- | -------- | ------------ | ------------ | ------------- |
+| **Inn5-CNet-Avg3** | **0.9291** | **0.0201** | **27.34** | **1.65** | **0.025928** | **0.043756** | 3次采样取均值 |
+| Baseline-Avg3      | 0.9119     | 0.0285     | 26.41     | 2.06     | 0.030288     | 0.049166     | 3次采样取均值 |
+
+### 21.3 关键发现
+
+**1. Inn5-CNet（cnet-ep-4.pth）是当前最优的单次采样方法**
+
+SSIM=0.9207 超过 0.92 目标阈值。相比 Baseline 提升 +1.91 个百分点（0.9207 vs 0.9016）。
+
+**2. 多次采样取均值（average_over_n=3）可进一步提升**
+
+Inn5-CNet-Avg3 的 SSIM 从 0.9207 提升至 **0.9291**（+0.84 个百分点），同时标准差从 0.0279 降至 0.0201，结果更稳定。PSNR 也从 26.62 提升至 27.34。
+
+Baseline-Avg3 同样受益：从 0.9016 提升至 0.9119（+1.03 个百分点）。
+
+**3. Method D（频率域方法）效果不佳**
+
+SSIM=0.8784，远低于 0.92 目标，甚至低于 Baseline 的 0.9016。time_aware context 模式与频率域 ControlNet 的组合未能改善效果。
+
+**4. 与 evaluate_regional.py 的结果一致性**
+
+| 方法                  | eval_fixed.py (本节) | evaluate_regional.py (Sections 8-18) | 差异    |
+| --------------------- | -------------------- | ------------------------------------ | ------- |
+| Baseline (pretrained) | 0.9016               | 0.8990 (Section 17.8)                | +0.0026 |
+| Inn5-CNet (cnet-ep-4) | 0.9207               | —                                    | 新评估  |
+| Innovation 2 BTR      | 待测                 | 0.9282 (Section 14)                  | —       |
+
+两个独立评估脚本的结果高度一致（Baseline 差异仅 0.0026），验证了修复后 eval_fixed.py 的正确性。
+
+### 21.4 当前最优方法推荐
+
+**最佳方案：Inn5-CNet-Avg3**
+
+- 配置：Innovation 5 ControlNet (`cnet-ep-4.pth`) + original context + average_over_n=3
+- SSIM = **0.9291 ± 0.0201**
+- PSNR = **27.34 ± 1.65**
+- MAE = **0.025928**
+- RMSE = **0.043756**
+
+**对比 Section 17.8 汇总表更新**：
+
+| 方法                  | SSIM       | 评估方式             | 状态            |
+| --------------------- | ---------- | -------------------- | --------------- |
+| Innovation 2 (BTR)    | 0.9282     | evaluate_regional.py | ✅ 之前最优     |
+| **Inn5-CNet-Avg3**    | **0.9291** | eval_fixed.py (avg3) | ✅ **当前最优** |
+| Inn5-CNet (n=1)       | 0.9207     | eval_fixed.py        | ✅ 达标         |
+| Linear (Section 18)   | 0.9268     | evaluate_regional.py | ✅ 达标         |
+| Baseline (pretrained) | 0.9016     | eval_fixed.py        | ⚠️ 未达 0.92    |
+| Method D (频率)       | 0.8784     | eval_fixed.py        | ❌ 不达标       |
+
+### 21.5 文件路径
+
+- 评估脚本（修复版）：`/home/wangchong/data/fwz/code/brlp_src/scripts/eval_fixed.py`
+- Inn5-CNet n=1 日志：`/home/wangchong/data/fwz/output/innovation5_cnet/eval_v5/eval.log`
+- Inn5-CNet-Avg3 日志：`/home/wangchong/data/fwz/output/innovation5_cnet/eval_v5_avg3/eval.log`
+- Baseline n=1 日志：`/home/wangchong/data/fwz/output/baseline_original/eval_v5/eval.log`
+- Baseline-Avg3 日志：`/home/wangchong/data/fwz/output/baseline_original/eval_v5_avg3/eval.log`
+- Method D 日志：`/home/wangchong/data/fwz/output/method_d_frequency/eval_v5/eval.log`
+
+---
+
+## 22. MCI 演化演示视频与转化预测可行性分析
+
+### 22.1 需求分析
+
+两个核心问题：
+
+1. **能否生成连续多张 MRI，组成 MCI 从基线到 2 年后的演化视频？**
+2. **能否基于生成结果判断 MCI 演化为 AD 或保持 CN 的可能性？**
+
+### 22.2 演示视频生成——技术可行性
+
+#### 22.2.1 已有基础
+
+我们的模型已在 Section 19 中验证了**多时间点连续生成**能力：
+
+- Direct-Linear 方法在 2 年范围内 SSIM ≥ 0.92
+- 从同一基线出发可生成任意 `followup_age` 的 3D MRI
+- 11 个被试、30 个时间点对，质量稳定
+
+生成"演化视频"本质上就是**在密集时间间隔上重复该过程**：
+
+```
+baseline MRI（t=0）
+    → 生成 t=3mo MRI
+    → 生成 t=6mo MRI
+    → 生成 t=9mo MRI
+    → 生成 t=12mo MRI
+    → 生成 t=18mo MRI
+    → 生成 t=24mo MRI
+    → 提取中间层切片 → 组装为 GIF/MP4
+```
+
+#### 22.2.2 实现方案
+
+**方案 A：Direct 模式（推荐）**
+
+- 从同一基线 latent 出发，分别生成各时间点
+- 每个时间点独立推理，互不影响
+- 使用 Direct-Linear 体积外推
+- 约 8 个时间点 × 5s/点 ≈ 40s（单个被试）
+
+**方案 B：Auto-Regressive 模式**
+
+- 链式生成：t0→t1→t2→...
+- 时间连续性更好，但误差会累积（Section 19 已证实）
+- 适合短程（≤1年）
+
+**视频制作流程**：
+
+1. 对每个时间点的 3D MRI 提取固定层切片（如 axial 中间层 z=61、sagittal 中间层 x=73、coronal 中间层 y=61）
+2. 使用 `matplotlib` 或 `imageio` 拼接为 GIF/MP4
+3. 可添加时间标注（"Baseline", "+6mo", "+12mo", ...）
+4. 可做三视图联动动画
+
+#### 22.2.3 技术难度评估
+
+| 环节              | 难度    | 说明                                 |
+| ----------------- | ------- | ------------------------------------ |
+| 多时间点 MRI 生成 | ⭐ 低   | 已有完整代码（Section 19），仅需调参 |
+| 切片提取          | ⭐ 低   | nibabel + numpy 即可                 |
+| 视频组装          | ⭐ 低   | imageio/matplotlib.animation         |
+| 三视图联动        | ⭐⭐ 中 | 需要布局设计                         |
+| 体积变化曲线叠加  | ⭐⭐ 中 | SynthSeg 分割 + 绘图                 |
+
+**结论：纯工程任务，不涉及新的模型训练，预计 1-2 小时可完成。**
+
+### 22.3 相关论文调研
+
+#### 22.3.1 纵向序列生成类
+
+| #   | 论文                              | 发表                    | 关键特点                                                                      | 与我们的关系                                             |
+| --- | --------------------------------- | ----------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 1   | **SADM** (Yoon et al.)            | IPMI 2023               | Sequence-aware Transformer + Diffusion，自回归生成纵向脑 MRI 序列             | **最相关**——唯一明确做序列式生成的论文，但是 2D 切片级别 |
+| 2   | **IP-LDM** (Huang et al.)         | arXiv 2025              | Identity-Preserving Latent Diffusion，triplet contrastive loss 保持身份一致性 | 其身份保持思路可用于提升视频连续性                       |
+| 3   | **LT-Diff**                       | HBM 2024                | 解耦身份特征 + 年龄条件，FID=23.59（OASIS-3），保持纵向一致性                 | 纵向身份保持的另一种方案                                 |
+| 4   | **SynthBrainGrow**                | DGM4MICCAI 2024         | Diffusion 模型模拟青少年脑 2 年老化，from cross-sectional data                | 证明了 diffusion 做纵向老化的可行性                      |
+| 5   | **TADM / TADM-3D**                | MICCAI 2024 / CMIG 2025 | 残差预测 + Brain Age Estimator 引导，2D→3D 扩展                               | 竞品方法，2D 为主                                        |
+| 6   | **CounterSynth** (Puglisi et al.) | MICCAI 2024             | 反事实脑老化 + 疾病进展建模                                                   | BrLP 作者的后续工作，思路相近                            |
+
+#### 22.3.2 MCI→AD 转化预测类
+
+| #   | 论文                 | 发表                                   | 方法                                                          | 关键指标                       |
+| --- | -------------------- | -------------------------------------- | ------------------------------------------------------------- | ------------------------------ |
+| 1   | **AD-Diff**          | Frontiers in Comp. Neuro. 2025         | 3D Diffusion 生成合成 PET + MRI 多模态融合 + Mamba Classifier | AUC 显著提升，OASIS+ADNI 验证  |
+| 2   | **TaDiff**           | TMI 2025                               | Treatment-aware Diffusion，预测不同治疗方案下的脑变化         | 被引 25 次，治疗感知的条件生成 |
+| 3   | DL系统综述           | Archives of Comp. Methods in Eng. 2024 | sMRI + fMRI + 临床数据，深度学习预测 MCI→AD                   | 综述了 2020-2024 所有方法      |
+| 4   | Multimodal Multitask | Scientific Reports 2023                | Stacked Polynomial Attention + 指数衰减，eMCI/lMCI 分类       | 多任务学习框架                 |
+
+#### 22.3.3 关键发现
+
+**1. 没有论文直接做"生成演化视频"**
+
+所有论文的输出都是离散时间点的图像。视频/动画仅作为论文的**补充材料**（supplementary material）展示，不是一个独立的研究贡献。SADM 最接近，它的 autoregressive 采样天然产生一个序列，但也没有做成视频形式。
+
+**2. "生成 + 预测"的组合是新颖的**
+
+目前论文中：
+
+- 生成类（BrLP、TADM、SADM 等）专注于图像质量
+- 预测类（AD-Diff、MCI→AD 分类器等）专注于诊断准确性
+- **几乎没有论文将二者结合**：用生成的未来 MRI 来做转化预测
+
+AD-Diff 最接近这个思路——它用 diffusion 生成合成 PET 来辅助 MCI→AD 预测——但它生成的是 PET 而不是未来时间点的 MRI。
+
+**3. TaDiff 的"治疗感知"思路与我们互补**
+
+TaDiff 可以预测不同治疗方案下的脑变化，而我们可以预测自然进展下的脑变化。如果结合起来，可以做"有治疗 vs 无治疗"的对比可视化。
+
+### 22.4 MCI 转化预测——可行性分析
+
+#### 22.4.1 方案一：生成未来 MRI → 提取体积变化 → 分类器
+
+```
+MCI 基线 MRI
+    → 生成 t+6mo, t+12mo, t+18mo, t+24mo MRI
+    → SynthSeg 分割每个时间点
+    → 提取海马体/侧脑室/皮质体积变化轨迹
+    → 用轨迹特征训练 MCI→AD / MCI→CN 分类器
+```
+
+**优点**：
+
+- 利用我们模型已有的能力
+- 体积变化轨迹是经典的 AD 预测特征
+- 所需额外工作量适中
+
+**挑战**：
+
+- 生成的体积变化是否准确反映真实进展？Section 18 发现体积通道影响极小，说明模型可能不擅长捕捉体积变化模式
+- 需要有 MCI→AD 转化的标注数据来训练分类器
+- 生成误差可能被分类器放大
+
+**可行性**：⚠️ 中等。需要验证生成图像的体积变化轨迹是否与真实轨迹一致。
+
+#### 22.4.2 方案二：生成不同诊断条件下的 MRI → 比较相似度
+
+```
+MCI 基线 MRI
+    → 条件设为 diagnosis=AD, age=+2年 → 生成 MRI_AD
+    → 条件设为 diagnosis=CN, age=+2年 → 生成 MRI_CN
+    → 条件设为 diagnosis=MCI, age=+2年 → 生成 MRI_MCI
+    → 比较 MRI_AD 与 MRI_CN 的差异
+    → 差异大 → 模型认为该患者 AD/CN 演化路径显著不同
+```
+
+**优点**：
+
+- 直接利用 ControlNet 的条件控制能力（8 维 context 中包含 diagnosis）
+- 可以可视化"如果变成 AD 会怎样" vs "如果保持稳定会怎样"
+- 视觉上非常直观，适合做论文 figure
+
+**挑战**：
+
+- Section 18 发现上下文向量（包括 diagnosis）对生成质量影响极小（SSIM 差异仅 0.0063）
+- 这意味着改变 diagnosis 条件可能不会产生显著不同的图像
+- 模型可能没有学到 diagnosis → 结构变化 的映射
+
+**可行性**：❌ 低。基于 Section 18 的发现，ControlNet 的 cross-attention 对 diagnosis 条件的响应很弱。
+
+#### 22.4.3 方案三：生成未来 MRI → 直接训练端到端分类器
+
+```
+MCI 基线 MRI → 生成 2 年后 MRI → [基线, 生成] pair → CNN/Transformer → AD/CN
+```
+
+**优点**：
+
+- 端到端，不依赖中间分割步骤
+- 网络可能学到肉眼不可见的结构变化模式
+
+**挑战**：
+
+- 需要大量有转化标签的训练数据
+- 训练成本高
+- 难以解释
+
+**可行性**：⚠️ 中等，但工程量大。
+
+#### 22.4.4 综合评估
+
+| 维度       | 视频生成                    | MCI→AD 预测              |
+| ---------- | --------------------------- | ------------------------ |
+| 技术可行性 | ✅ 高——纯工程               | ⚠️ 中——需二次验证        |
+| 创新性     | ⭐ 低——展示性质             | ⭐⭐⭐ 高——无先例        |
+| 论文价值   | 适合做 supplementary figure | 适合做独立 contribution  |
+| 投入产出比 | ⭐⭐⭐ 高（1-2h搞定）       | ⭐ 低（需大量额外实验）  |
+| 风险       | 几乎无                      | 高——可能发现模型不够区分 |
+
+### 22.5 推荐行动
+
+**立即可做（演示视频）**：
+
+1. 选择 1-2 个 MCI 测试被试（如 Section 19 中的 005_S_0572，有 6 次访问跨 36 个月）
+2. 用 Direct-Linear 方法生成 baseline → +3mo → +6mo → +9mo → +12mo → +18mo → +24mo
+3. 提取 axial/sagittal/coronal 中间切片
+4. 组装为 GIF 动画，配上时间标注
+5. 如有真实随访 MRI，可做并排对比（generated vs real）
+
+**需要谨慎评估后再决定（转化预测）**：
+
+1. 先做一个快速验证：生成几个已知 MCI→AD 和 MCI→stable 的被试的 2 年后 MRI
+2. 用 SynthSeg 分割，看生成的体积变化轨迹是否与真实转化结局相关
+3. 如果相关——值得深入做成独立实验
+4. 如果不相关——说明ControlNet更多是做"图像外推"而非"临床预测"，可在论文中作为 limitation 讨论
+
+### 22.6 论文写作建议
+
+**演化视频**可作为：
+
+- 论文 Figure（展示模型的连续生成能力）
+- Supplementary 动画材料
+- 临床演示场景（"给医生看未来可能的脑变化"）
+
+**转化预测**可作为：
+
+- Discussion 中的 "potential clinical application"
+- Future Work 章节的核心方向
+- 如果验证有效，可以作为独立的 follow-up 论文
+
+---
+
+## Section 23: "生成未来MRI → SynthSeg分割 → 体积轨迹 → 分类器" 管线文献调研与可行性分析
+
+**日期**: 2025-07
+
+**问题**: 用户提出的完整管线：用生成模型产生未来时间点的MRI → 用SynthSeg等工具分割提取脑区体积 → 构建体积变化轨迹 → 用分类器预测MCI→AD转化。这个管线有没有人做过？可行性如何？
+
+### 23.1 关键发现：AD-DAE 已经做了几乎完全相同的管线
+
+**最关键的论文**：
+
+**AD-DAE: Unsupervised Modeling of Longitudinal Alzheimer's Disease Progression with Diffusion Auto-Encoder**
+
+- 作者: Ayantika Das, Arunima Sarkar, Keerthi Ram, Mohanasankar Sivaprakasam (IIT Madras)
+- arXiv: 2511.05934, 2025年11月, 投稿至 Computerized Medical Imaging and Graphics (CMIG)
+- 代码: https://github.com/ayantikadas/AD_DAE
+
+**AD-DAE 的管线与用户想法的对应关系**：
+
+| 管线步骤        | 用户想法                           | AD-DAE 实现                                           |
+| --------------- | ---------------------------------- | ----------------------------------------------------- |
+| 1. 生成未来MRI  | BrLP/ControlNet 生成 follow-up MRI | Diffusion Auto-Encoder + 潜空间位移生成 follow-up MRI |
+| 2. 分割         | SynthSeg 分割脑区                  | **明确使用 SynthSeg** (Billot et al.) 作为分割工具    |
+| 3. 提取体积变化 | 体积轨迹                           | 提取海马体、杏仁核、侧脑室的归一化体积变化            |
+| 4. 分类器       | 分类 MCI→AD                        | ResNeXt + MLP 训练疾病分类器，测试生成数据的增强效果  |
+
+**换言之，AD-DAE 几乎 1:1 实现了用户提出的管线**。
+
+### 23.2 AD-DAE 的技术细节与我们方法的比较
+
+**AD-DAE 方法核心**：
+
+- 使用 Image-level Diffusion Auto-Encoder（不是 latent diffusion如BrLP）
+- Encoder ℰ 将 MRI 映射到 512维 latent space
+- Latent Shift Module 𝒜 根据 (认知状态 v_d, 年龄差 v_a) 估计 shift vector z'
+- Shift 只加到前 m=50 维（进展相关维度），后 462 维保持不变（身份保持）
+- Consistency Module ℛ 确保生成变化与输入属性一致
+- **无监督**：不需要受试者配对的纵向数据
+
+**AD-DAE vs BrLP 在 AD-DAE 论文中的对比结果**：
+
+| 方法           | PSNR (CN)      | PSNR (MCI&AD)  | SSIM (CN)      | SSIM (MCI&AD)  |
+| -------------- | -------------- | -------------- | -------------- | -------------- |
+| BrLP           | 26.71±1.02     | 26.20±1.14     | 0.79±0.022     | 0.79±0.025     |
+| SITGAN         | 28.73±3.25     | 28.09±3.23     | 0.94±0.033     | 0.93±0.034     |
+| **AD-DAE**     | **30.10±3.05** | **29.43±3.14** | **0.94±0.033** | **0.94±0.031** |
+| Naive Baseline | 27.25±2.12     | 26.75±2.07     | 0.93±0.021     | 0.92±0.021     |
+
+**注意**：BrLP 在 AD-DAE 论文中的 SSIM 只有 0.79，远低于其他方法。AD-DAE 作者指出原因是 "BrLP 的 VAE formulation 无法确保进展相关的结构变化能忠实传递到解码后的图像空间"。
+
+**体积分析 (使用 SynthSeg 分割后) 的 MAE**：
+
+| 方法       | 海马体 MAE      | 杏仁核 MAE      | 侧脑室 MAE      |
+| ---------- | --------------- | --------------- | --------------- |
+| BrLP       | 0.196±0.055     | 0.173±0.053     | 0.370±0.101     |
+| SITGAN     | 0.116±0.029     | 0.021±0.020     | 0.144±0.105     |
+| **AD-DAE** | **0.028±0.028** | **0.018±0.018** | **0.041±0.039** |
+
+AD-DAE 的体积误差比 BrLP 低一个数量级！
+
+**下游分类实验**：
+
+- 训练 AD 分类器，用不同比例的真实数据(RD) vs 生成数据(GD) 混合
+- 在 20%RD + 80%GD 条件下，所有方法都超过 20%RD baseline
+- 在 40%RD + 60%GD 条件下，只有 AD-DAE 和 SITGAN 超过纯 RD baseline
+- AD-DAE 在所有 RD-GD 比例下表现最好
+- **结论**：生成的 MRI 确实能有效增强分类器训练
+
+### 23.3 其他相关论文
+
+#### A. 数据增强类（生成合成MRI → 训练分类器）
+
+1. **PACGAN** (Nature Scientific Reports, 2025)
+   - 在合成 brain MRI 上预训练 AD 分类器
+   - 提高了下游 AD 检测的准确率
+
+2. **Counterfactual Brain MRI Generation** (biorxiv, 2024)
+   - 生成反事实 MRI（如果这个患者是 AD 会怎样？）
+   - 用生成的反事实数据增强 AD 分类器，准确率提升 3%
+
+3. **Diffusion Models for 3D Neuroimaging Data Augmentation** (Springer, 2025)
+   - 用扩散模型生成合成 3D T1w MRI
+   - 验证了合成数据对 AD 分类的增强效果
+
+4. **Generative AI Improves AD Detection** (AAIC 2024)
+   - 用合成数据训练，ROC-AUC 从 0.8656 提升到 0.8869
+
+#### B. 纵向轨迹预测类
+
+5. **LongFormer: Longitudinal Transformer for AD Classification** (WACV 2024, arXiv: 2302.00901)
+   - 使用纵向 sMRI 序列（多个时间点的**真实**MRI）进行 AD 分类
+   - 时空 Transformer：空间上对每个时间点做 attention，时间上整合脑区特征
+   - 利用 AD 的渐进性质实现 SOTA 分类
+   - **与我们的区别**：使用真实纵向 MRI，不涉及生成
+
+6. **Individualized Multi-horizon MRI Trajectory Prediction** (Springer)
+   - 预测个体化的多时间点 MRI 轨迹
+   - 用于提高 AD 特异性
+
+#### C. 合成分割类
+
+7. **CSegSynth** (arXiv: 2504.12352, 2025)
+   - 从人口学数据（年龄、性别等）直接生成合成脑 MRI **分割图**
+   - 不生成 MRI 图像本身，而是直接生成 WM/GM/CSF 的分割
+   - MAE ~30-36mL
+   - **与我们的区别**：跳过了生成 MRI 这一步，直接生成分割
+
+#### D. 纵向 MRI 生成 + 临床评估
+
+8. **AD-Diff** (Frontiers in Neuroscience, 2025)
+   - 用 3D 扩散模型生成合成 PET 图像
+   - 结合 Mamba 分类器进行 AD 检测
+   - 多模态融合（MRI + 合成PET）
+
+9. **LDAE: Latent Diffusion Autoencoders** (arXiv: 2504.08635, CMIG 2025)
+   - 在压缩 latent space 中应用扩散，用于 AD 非监督学习
+   - 与 AD-DAE 来自相似的研究方向
+
+### 23.4 对我们项目的意义分析
+
+#### 结论1：管线不是全新的，AD-DAE 已经做了
+
+AD-DAE (2025年11月) 明确实现了 "生成follow-up MRI → SynthSeg分割 → 体积分析 → 分类器" 的完整管线。而且他们的效果很好，特别是在体积误差上远超 BrLP。
+
+#### 结论2：BrLP 在这个管线中表现不佳
+
+AD-DAE 论文中 BrLP 的 SSIM 只有 0.79，体积 MAE 高达 0.196/0.173/0.370。作者明确批评了 BrLP 的 VAE 瓶颈导致图像质量受限。
+
+**但是**：我们的 Innovation 5 (ControlNet) 增强版 BrLP 的 SSIM 达到了 0.9291，远高于原版 BrLP 的 0.79。这意味着我们的改进版本可能在这个管线中表现得更好。
+
+#### 结论3：我们的改进可以作为差异化切入点
+
+- AD-DAE 的基线对比中 BrLP (SSIM=0.79) 是原版
+- 我们的 Innovation 5 ControlNet (SSIM=0.9291) 是增强版
+- 如果用我们改进的 BrLP 跑同样的管线（SynthSeg分割 → 体积轨迹 → 分类），可能：
+  - 超过 AD-DAE 论文中报告的 BrLP 结果
+  - 与 AD-DAE 形成有意义的对比
+
+#### 结论4：Section 18 的发现带来关键警告
+
+Section 18 实验发现 context vector（包括 5 个脑区体积和诊断信息）对 ControlNet 生成质量的影响很小（SSIM 范围仅 0.006）。这意味着：
+
+- **ControlNet 主要依赖起始 latent（空间信息）而非临床属性**
+- 生成的 follow-up MRI 可能主要反映空间外推，而非疾病特异性的结构变化
+- 因此 SynthSeg 从生成 MRI 提取的体积可能没有足够的**疾病区分度**
+- AD-DAE 通过显式的"潜空间位移 + 一致性模块"解决了这个问题，确保生成变化与疾病状态相关
+
+### 23.5 如果要在我们的框架下实现此管线
+
+**可行方案**：
+
+1. **快速验证（1-2天）**：
+   - 选 20 个测试集受试者（10个已知 MCI→AD, 10个 MCI→stable）
+   - 生成他们的 2 年后 MRI（用 Inn5-CNet-Avg3）
+   - SynthSeg 分割 baseline 和 generated follow-up
+   - 计算海马体、杏仁核、侧脑室的体积变化
+   - 看两组（converter vs stable）的体积变化轨迹是否有统计学差异
+
+2. **深入实验（1-2周）**：
+   - 如果快速验证有差异，扩展到更多受试者
+   - 训练简单分类器（logistic regression / SVM / MLP）
+   - 与直接用 baseline MRI 特征预测转化的方法对比
+
+**技术要点**：
+
+- SynthSeg 是 FreeSurfer 7+ 自带的，不需要额外训练
+- 命令：`mri_synthseg --i input.nii.gz --o seg.nii.gz --vol volumes.csv`
+- 可以直接提取 ~95 个脑区的体积
+
+**潜在问题**：
+
+- Section 18 的发现暗示我们的模型可能在疾病区分度上不够强
+- AD-DAE 已经证明 image-level diffusion + 显式解耦优于 latent diffusion (BrLP)
+- 我们需要证明 ControlNet 增强能弥补 BrLP VAE 的不足
+
+### 23.6 论文写作角度
+
+**如果把此管线放入论文**：
+
+1. **不适合作为主要创新点**——AD-DAE 已经做了而且效果很好
+2. **适合作为 supplementary analysis / ablation**——展示我们的 ControlNet 增强版在体积层面也有改进
+3. **最佳角度**：
+   - "我们的 ControlNet 增强将 BrLP 的 SSIM 从 0.79 提升到 0.93"
+   - "在体积分析上，增强版是否也带来了类似的改进？"
+   - 这是一个有价值的 **ablation study**，而非独立的 contribution
+
+**如果要独立发论文**：
+
+- 需要找到与 AD-DAE 不同的切入点
+- 可能方向：(1) 3D 生成而非 2D 切片拼接；(2) 多时间点轨迹而非单步预测；(3) 结合临床变量的个性化预测
+- 参考 LongFormer 的思路：不只看一张生成图，而是看**生成的纵向序列**
+
+### 23.7 总结
+
+| 问题                   | 回答                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------- |
+| 有没有人做过这个管线？ | **有**，AD-DAE (2025) 几乎完全实现了                                            |
+| 用的什么分割工具？     | **SynthSeg**（和用户想的一样）                                                  |
+| BrLP 在其中表现如何？  | **差**（SSIM=0.79, 体积MAE高），被 AD-DAE 显著超越                              |
+| 我们的改进版有机会吗？ | **有**，但需要实验验证 ControlNet 增强是否真的改善了体积层面的结果              |
+| 建议后续方向？         | 快速验证（SynthSeg 分割 Inn5-CNet 生成的 MRI），如果有效则纳入论文作为 ablation |

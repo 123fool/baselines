@@ -1,3 +1,11 @@
+# Fix PyTorch 2.6+ weights_only=True for MONAI MetaTensor
+import torch
+try:
+    from monai.data.meta_tensor import MetaTensor
+    torch.serialization.add_safe_globals([MetaTensor])
+except Exception:
+    pass
+
 from .data import get_dataset_from_pd
 from .gradacc import GradientAccumulation
 from .losses import KLDivergenceLoss

@@ -1,0 +1,140 @@
+{
+  "n_subjects": 8,
+  "subjects": [
+    {
+      "subject_id": "002_S_1070",
+      "n_visits": 6,
+      "n_timepoints": 7,
+      "n_ad_timepoints": 2,
+      "n_correctly_classified_ad": 0,
+      "ad_accuracy": 0.0,
+      "mean_ad_probability": 0.0007366028195672702,
+      "ad_prob_trend": [
+        0.0005077204690126712,
+        0.0009654851701218694
+      ]
+    },
+    {
+      "subject_id": "023_S_0388",
+      "n_visits": 6,
+      "n_timepoints": 7,
+      "n_ad_timepoints": 3,
+      "n_correctly_classified_ad": 0,
+      "ad_accuracy": 0.0,
+      "mean_ad_probability": 0.00012792938597405872,
+      "ad_prob_trend": [
+        0.00011993876622574618,
+        9.659700630533447e-05,
+        0.00016725238539109553
+      ]
+    },
+    {
+      "subject_id": "023_S_0604",
+      "n_visits": 6,
+      "n_timepoints": 7,
+      "n_ad_timepoints": 3,
+      "n_correctly_classified_ad": 0,
+      "ad_accuracy": 0.0,
+      "mean_ad_probability": 0.00012200166062956604,
+      "ad_prob_trend": [
+        0.00012200166062956604,
+        0.00012200166062956604,
+        0.00012200166062956604
+      ]
+    },
+    {
+      "subject_id": "027_S_0835",
+      "n_visits": 6,
+      "n_timepoints": 7,
+      "n_ad_timepoints": 2,
+      "n_correctly_classified_ad": 0,
+      "ad_accuracy": 0.0,
+      "mean_ad_probability": 0.24149845679323997,
+      "ad_prob_trend": [
+        0.24149845679323997,
+        0.24149845679323997
+      ]
+    },
+    {
+      "subject_id": "053_S_0507",
+      "n_visits": 6,
+      "n_timepoints": 7,
+      "n_ad_timepoints": 4,
+      "n_correctly_classified_ad": 0,
+      "ad_accuracy": 0.0,
+      "mean_ad_probability": 0.18218593491494156,
+      "ad_prob_trend": [
+        0.17869332477999297,
+        0.17869332477999297,
+        0.17869332477999297,
+        0.1926637653197874
+      ]
+    },
+    {
+      "subject_id": "023_S_0331",
+      "n_visits": 6,
+      "n_timepoints": 7,
+      "n_ad_timepoints": 1,
+      "n_correctly_classified_ad": 0,
+      "ad_accuracy": 0.0,
+      "mean_ad_probability": 0.0001220853699355271,
+      "ad_prob_trend": [
+        0.0001220853699355271
+      ]
+    },
+    {
+      "subject_id": "016_S_1326",
+      "n_visits": 5,
+      "n_timepoints": 7,
+      "n_ad_timepoints": 2,
+      "n_correctly_classified_ad": 0,
+      "ad_accuracy": 0.0,
+      "mean_ad_probability": 0.00014373728954098451,
+      "ad_prob_trend": [
+        0.00011780295477037594,
+        0.0001696716243115931
+      ]
+    },
+    {
+      "subject_id": "023_S_1247",
+      "n_visits": 5,
+      "n_timepoints": 7,
+      "n_ad_timepoints": 3,
+      "n_correctly_classified_ad": 0,
+      "ad_accuracy": 0.0,
+      "mean_ad_probability": 9.008606159893258e-05,
+      "ad_prob_trend": [
+        9.088673016259282e-05,
+        8.968572731710247e-05,
+        8.968572731710247e-05
+      ]
+    }
+  ],
+  "overall": {
+    "ad_timepoints": {
+      "total": 20,
+      "predicted_AD": 0,
+      "predicted_MCI": 14,
+      "predicted_CN": 6,
+      "accuracy": 0.0,
+      "mean_ad_prob": 0.06073217350795029,
+      "std_ad_prob": 0.09375224768501927
+    },
+    "mci_timepoints": {
+      "total": 25,
+      "predicted_MCI": 19,
+      "predicted_CN": 6,
+      "predicted_AD": 0,
+      "accuracy": 0.76,
+      "mean_mci_prob": 0.7598754544776765
+    }
+  },
+  "timestamp": "2026-04-14 07:16:39",
+  "analysis_notes": [
+    "Classifier trained on volume features only (5 regions)",
+    "Training data imbalance: MCI >> CN > AD",
+    "SynthSeg segmentation may have systematic errors",
+    "Volume normalization by head_size may not capture atrophy patterns",
+    "Generated images maintain structural similarity but may not alter volumes sufficiently"
+  ]
+}

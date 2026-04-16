@@ -69,6 +69,21 @@ MULTI_TP_OUTPUT_DIR  = "/home/wangchong/data/fwz/output/multi_timepoint"
 MULTI_TP_EVAL_LOG    = "/home/wangchong/data/fwz/output/multi_timepoint/eval_multi_tp.log"
 MULTI_TP_SUMMARY     = "/home/wangchong/data/fwz/output/multi_timepoint/summary_multi_timepoint.json"
 
+# ── MCI→AD 分类预测分析 (Section 25) ──
+MCI_AD_OUTPUT_DIR    = "/home/wangchong/data/fwz/output/mci_ad_classification"
+MCI_AD_PIPELINE_LOG  = "/home/wangchong/data/fwz/output/mci_ad_classification/pipeline.log"
+# MCI→AD converters identified from E:\ADNI (8 subjects, all completed)
+MCI_AD_SUBJECTS = [
+    {"ptid": "002_S_1070", "n_visits": 6, "mci_visits": 4, "ad_visits": 2},
+    {"ptid": "023_S_0388", "n_visits": 6, "mci_visits": 3, "ad_visits": 3},
+    {"ptid": "023_S_0604", "n_visits": 6, "mci_visits": 3, "ad_visits": 3},
+    {"ptid": "027_S_0835", "n_visits": 6, "mci_visits": 4, "ad_visits": 2},
+    {"ptid": "053_S_0507", "n_visits": 6, "mci_visits": 2, "ad_visits": 4},
+    {"ptid": "023_S_0331", "n_visits": 6, "mci_visits": 5, "ad_visits": 1},
+    {"ptid": "016_S_1326", "n_visits": 5, "mci_visits": 3, "ad_visits": 2},
+    {"ptid": "023_S_1247", "n_visits": 5, "mci_visits": 2, "ad_visits": 3},
+]
+
 # ── 借鉴方法验证实验 (Section 21+) ──
 # Method B: Time-Aware Context (替代辅助模型)
 METHOD_B_OUTPUT_DIR  = "/home/wangchong/data/fwz/output/method_b_time_aware"
@@ -87,6 +102,15 @@ METHOD_D_OUTPUT_DIR  = "/home/wangchong/data/fwz/output/method_d_freq"
 METHOD_D_TRAIN_LOG   = "/home/wangchong/data/fwz/output/method_d_freq/controlnet/train_freq.log"
 METHOD_D_EVAL_LOG    = "/home/wangchong/data/fwz/output/method_d_freq/eval"
 METHOD_D_SUMMARY     = "/home/wangchong/data/fwz/output/method_d_freq/eval/summary_method-d-frequency.json"
+
+# ── 验证机制实验 (Section 27) ──
+VERIFY_OUTPUT_DIR     = "/home/wangchong/data/fwz/output/verification"
+VERIFY_RUNNER_LOG     = "/home/wangchong/data/fwz/output/verification/runner.log"
+VERIFY_MASTER_SUMMARY = "/home/wangchong/data/fwz/output/verification/master_summary.json"
+
+# ── Early-Timestep BoN 实验 (Section 30) ──
+ET_BON_OUTPUT_DIR     = "/home/wangchong/data/fwz/output/verification/et_bon"
+ET_BON_LOG            = "/home/wangchong/data/fwz/output/verification/et_bon/et_bon_experiment.log"
 
 # 缓存
 _cache = {
@@ -107,6 +131,9 @@ _cache = {
     "method_b_progress": None,
     "method_c_progress": None,
     "method_d_progress": None,
+    "mci_ad_progress": None,
+    "verify_progress": None,
+    "et_bon_progress": None,
 }
 _cache_lock = threading.Lock()
 
@@ -1015,6 +1042,278 @@ def fetch_method_d_progress():
     )
 
 
+def fetch_mci_ad_progress():
+    """采集 MCI→AD 分类预测流水线进度。"""
+    progress = {
+        "task_name": "MCI→AD 分类预测分析 (Section 24)",
+        "subjects": [],
+        "current_subject": None,
+        "total_subjects": len(MCI_AD_SUBJECTS),
+        "completed_subjects": 0,
+        "state": "idle",
+        "state_text": "未运行",
+        "bias_analysis": None,
+        "log_tail": "",
+    }
+
+    # Check pipeline log
+    log_tail = ssh_exec(f"tail -40 {MCI_AD_PIPELINE_LOG} 2>/dev/null")
+    if log_tail and "ERROR" not in log_tail:
+        progress["log_tail"] = log_tail[-800:]
+
+    # Check pipeline process
+    proc = ssh_exec("ps aux | grep 'run_pipeline_mci_ad.py' | grep -v grep")
+
+    # Check per-subject results
+    for sub_info in MCI_AD_SUBJECTS:
+        ptid = sub_info["ptid"]
+        summary_path = f"{MCI_AD_OUTPUT_DIR}/{ptid}/{ptid}_summary.json"
+        summary_raw = ssh_exec(f"cat {summary_path} 2>/dev/null")
+        sub_entry = {
+            "ptid": ptid,
+            "n_visits": sub_info.get("n_visits", 0),
+            "mci_visits": sub_info.get("mci_visits", 0),
+            "ad_visits": sub_info.get("ad_visits", 0),
+            "state": "idle",
+            "state_text": "待处理",
+            "predictions": [],
+            "mean_ssim": None,
+            "final_class": None,
+            "ad_prob_trend": None,
+        }
+        if summary_raw and "ERROR" not in summary_raw and summary_raw.strip().startswith("{"):
+            try:
+                summary_obj = json.loads(summary_raw)
+                sub_entry["state"] = "completed"
+                sub_entry["state_text"] = "已完成"
+                progress["completed_subjects"] += 1
+                timeline = summary_obj.get("timeline", [])
+                for v in timeline:
+                    sub_entry["predictions"].append({
+                        "visit": v.get("timepoint_idx"),
+                        "months": v.get("months_from_baseline", 0),
+                        "real_diag": v.get("real_diagnosis", "?"),
+                        "pred_class": v.get("predicted_class", "?"),
+                        "ad_prob": v.get("class_probs", {}).get("AD", 0),
+                        "cn_prob": v.get("class_probs", {}).get("CN", 0),
+                        "mci_prob": v.get("class_probs", {}).get("MCI", 0),
+                        "ssim": v.get("ssim", 0),
+                    })
+                # Overall metrics
+                overall = summary_obj.get("overall_metrics", {})
+                sub_entry["mean_ssim"] = overall.get("mean_ssim")
+                # Bias analysis
+                bias = summary_obj.get("bias_analysis", {})
+                sub_entry["n_ad_tps"] = bias.get("n_ad_timepoints", 0)
+                sub_entry["ad_accuracy"] = bias.get("ad_accuracy", 0)
+                # AD probability trend
+                ad_probs = [v.get("class_probs", {}).get("AD", 0) for v in timeline]
+                sub_entry["ad_prob_trend"] = ad_probs
+                if timeline:
+                    sub_entry["final_class"] = timeline[-1].get("predicted_class", "?")
+            except Exception:
+                pass
+        elif proc and ptid in (log_tail or ""):
+            sub_entry["state"] = "running"
+            sub_entry["state_text"] = "处理中"
+            progress["current_subject"] = ptid
+
+        progress["subjects"].append(sub_entry)
+
+    # Overall state
+    if progress["completed_subjects"] >= progress["total_subjects"]:
+        progress["state"] = "completed"
+        progress["state_text"] = f"全部完成 ({progress['completed_subjects']}/{progress['total_subjects']})"
+    elif proc and "ERROR" not in proc:
+        progress["state"] = "running"
+        progress["state_text"] = f"运行中 ({progress['completed_subjects']}/{progress['total_subjects']})"
+    elif progress["completed_subjects"] > 0:
+        progress["state"] = "partial"
+        progress["state_text"] = f"部分完成 ({progress['completed_subjects']}/{progress['total_subjects']})"
+    else:
+        progress["state"] = "idle"
+        progress["state_text"] = "待启动"
+
+    # Load bias analysis if exists
+    bias_path = f"{MCI_AD_OUTPUT_DIR}/bias_analysis.json"
+    bias_raw = ssh_exec(f"cat {bias_path} 2>/dev/null")
+    if bias_raw and "ERROR" not in bias_raw and bias_raw.strip().startswith("{"):
+        try:
+            progress["bias_analysis"] = json.loads(bias_raw)
+        except Exception:
+            pass
+
+    return progress
+
+
+def fetch_verify_progress():
+    """采集验证机制实验 (Section 28/29) 进度 — 含大规模实验。"""
+    progress = {
+        "task_name": "验证机制实验 (Best-of-N / Round-Trip / 大规模验证)",
+        "state": "idle",
+        "state_text": "待启动",
+        "experiments": [],
+        "current_experiment": None,
+        "log_tail": "",
+        "master_summary": None,
+        "completed_results": {},   # {exp_name: summary_dict}  已完成实验的结果缓存
+    }
+
+    # Check if runner is active
+    proc = ssh_exec("ps aux | grep 'evaluate_verification.py\\|run_fullscale.py\\|run_bon_fullscale.py' | grep -v grep")
+
+    # All experiment directories to scan
+    exp_names = [
+        "quick_compare", "weighted_compare", "bon_n8_full", "roundtrip_test",
+        "fullscale_50", "fullscale_bon_weighted",
+    ]
+
+    for exp in exp_names:
+        entry = {"name": exp, "state": "idle", "state_text": "待启动", "summary": None,
+                 "n_pairs": 0, "methods": [], "best_method": None, "best_ssim": 0}
+
+        # Try to load summary JSON (standard naming convention)
+        for suffix in [f"summary_verification_eval.json", f"summary_{exp}.json"]:
+            summary_path = f"{VERIFY_OUTPUT_DIR}/{exp}/{suffix}"
+            summary_raw = ssh_exec(f"cat {summary_path} 2>/dev/null")
+            if summary_raw and "ERROR" not in summary_raw and summary_raw.strip().startswith("{{"):
+                try:
+                    data = json.loads(summary_raw)
+                    entry["summary"] = data.get("summary", {})
+                    entry["state"] = "completed"
+                    entry["state_text"] = "完成"
+                    entry["n_pairs"] = data.get("config", {}).get("max_pairs", 0)
+                    entry["methods"] = list(entry["summary"].keys())
+                    # Find best method by overall SSIM
+                    best_m, best_s = None, 0
+                    for m, v in entry["summary"].items():
+                        s = v.get("overall_ssim", 0)
+                        if s > best_s:
+                            best_s, best_m = s, m
+                    entry["best_method"] = best_m
+                    entry["best_ssim"] = best_s
+                    progress["completed_results"][exp] = entry["summary"]
+                    break
+                except Exception:
+                    pass
+
+        # If no summary yet, check log to see if running
+        if entry["state"] == "idle":
+            log_path = f"{VERIFY_OUTPUT_DIR}/{exp}/eval_verification.log"
+            log_tail = ssh_exec(f"tail -8 {log_path} 2>/dev/null")
+            if log_tail and "ERROR" not in log_tail and "Pair" in log_tail:
+                entry["state"] = "running"
+                entry["state_text"] = "运行中"
+                progress["current_experiment"] = exp
+                # Parse pair count from log
+                import re as _re
+                pair_nums = _re.findall(r"Pair (\d+):", log_tail)
+                if pair_nums:
+                    entry["current_pair"] = max(int(p) for p in pair_nums)
+                entry["log_tail_short"] = log_tail.strip().split("\n")[-1]
+
+        progress["experiments"].append(entry)
+
+    # Aggregate state
+    n_complete = sum(1 for e in progress["experiments"] if e["state"] == "completed")
+    n_running  = sum(1 for e in progress["experiments"] if e["state"] == "running")
+    if n_running > 0:
+        progress["state"] = "running"
+        progress["state_text"] = f"运行中 ({n_complete} 完成, {n_running} 运行)"
+    elif n_complete == len(exp_names):
+        progress["state"] = "completed"
+        progress["state_text"] = "全部完成"
+    elif n_complete > 0:
+        progress["state"] = "partial"
+        progress["state_text"] = f"部分完成 ({n_complete}/{len(exp_names)})"
+
+    # Get full running log tail
+    if progress["current_experiment"]:
+        log_path = f"{VERIFY_OUTPUT_DIR}/{progress['current_experiment']}/eval_verification.log"
+        progress["log_tail"] = ssh_exec(f"tail -30 {log_path} 2>/dev/null") or ""
+
+    return progress
+
+
+def fetch_et_bon_progress():
+    """采集 Early-Timestep BoN 实验 (Section 30) 进度。"""
+    progress = {
+        "task_name": "ET-BoN 早期时间步筛选实验",
+        "state": "idle",
+        "state_text": "待启动",
+        "configs_tested": [],
+        "current_config": None,
+        "current_pair": 0,
+        "total_pairs": 0,
+        "las_baseline": {},
+        "results": {},
+        "best_config": None,
+        "log_tail": "",
+    }
+
+    # Check if running
+    proc = ssh_exec("ps aux | grep 'run_et_bon_experiment.py' | grep -v grep")
+    if proc and "ERROR" not in proc and proc.strip():
+        progress["state"] = "running"
+        progress["state_text"] = "运行中"
+
+    # Try to load results JSON
+    results_raw = ssh_exec(f"cat {ET_BON_OUTPUT_DIR}/et_bon_results.json 2>/dev/null")
+    if results_raw and "ERROR" not in results_raw and results_raw.strip().startswith("{"):
+        try:
+            data = json.loads(results_raw)
+            progress["total_pairs"] = data.get("n_pairs", 0)
+
+            # LAS baseline
+            las = data.get("las_baseline", {})
+            if las.get("avg_ssim"):
+                progress["las_baseline"] = {
+                    "avg_ssim": las["avg_ssim"],
+                    "avg_mae": las.get("avg_mae", 0),
+                    "avg_time": las.get("avg_time", 0),
+                }
+
+            # ET-BoN configs
+            configs = data.get("configs", {})
+            for name, cfg_data in configs.items():
+                entry = {
+                    "name": name,
+                    "avg_ssim": cfg_data.get("avg_ssim", 0),
+                    "avg_mae": cfg_data.get("avg_mae", 0),
+                    "avg_time": cfg_data.get("avg_time", 0),
+                    "vs_las_win_rate": cfg_data.get("vs_las_win_rate", 0),
+                    "vs_las_p_value": cfg_data.get("vs_las_p_value"),
+                    "step_savings": cfg_data.get("step_savings_pct", 0),
+                    "n_pairs": len([p for p in cfg_data.get("pairs", []) if "error" not in p]),
+                }
+                progress["configs_tested"].append(entry)
+                progress["results"][name] = entry
+
+            if configs:
+                progress["best_config"] = max(configs, key=lambda k: configs[k].get("avg_ssim", 0))
+                if not proc or "ERROR" in proc or not proc.strip():
+                    progress["state"] = "completed"
+                    progress["state_text"] = f"完成 ({len(configs)} 配置)"
+        except Exception:
+            pass
+
+    # Log tail
+    log_tail = ssh_exec(f"tail -15 {ET_BON_LOG} 2>/dev/null")
+    if log_tail and "ERROR" not in log_tail:
+        progress["log_tail"] = log_tail.strip()
+        # Parse current pair from log
+        import re as _re
+        pair_nums = _re.findall(r"Pair (\d+):", log_tail)
+        if pair_nums:
+            progress["current_pair"] = max(int(p) for p in pair_nums)
+        # Parse current config
+        config_match = _re.findall(r"Config \[\d+/\d+\]: (\S+)", log_tail)
+        if config_match:
+            progress["current_config"] = config_match[-1]
+
+    return progress
+
+
 def fetch_project_changes():
     """采集本地仓库最新提交与工作区改动。"""
     info = {
@@ -1091,6 +1390,9 @@ def background_refresh():
             method_b_progress = fetch_method_b_progress()
             method_c_progress = fetch_method_c_progress()
             method_d_progress = fetch_method_d_progress()
+            mci_ad_progress = fetch_mci_ad_progress()
+            verify_progress = fetch_verify_progress()
+            et_bon_progress = fetch_et_bon_progress()
             project_changes = fetch_project_changes()
             with _cache_lock:
                 _cache["server_info"] = info
@@ -1106,6 +1408,9 @@ def background_refresh():
                 _cache["method_b_progress"] = method_b_progress
                 _cache["method_c_progress"] = method_c_progress
                 _cache["method_d_progress"] = method_d_progress
+                _cache["mci_ad_progress"] = mci_ad_progress
+                _cache["verify_progress"] = verify_progress
+                _cache["et_bon_progress"] = et_bon_progress
                 _cache["project_changes"] = project_changes
                 _cache["last_update"] = info.get("timestamp")
                 _cache["error"] = None
@@ -1322,6 +1627,30 @@ CODE_CHANGES = [
         "reason": "借鉴Forecasting Future Anatomies(2025)的多尺度结构损失; 标准MSE对所有频率等权处理,但脑萎缩涉及低频(总体积)和高频(皮层褶皱)变化; 频域损失针对性加权",
         "result": "训练中...",
     },
+    {"time": "2026-04-13",
+        "file": "run_pipeline_mci_ad.py (Section 24)",
+        "change": "MCI→AD 分类预测分析 — 从ADNI MCI CSV筛选27个MCI→AD转化患者; 每6个月间隔生成预测图像; 有真实数据则对照(SSIM/PSNR/MAE),无则仅展示生成图; GradientBoosting 3类分类器预测CN/MCI/AD; 体积特征从synthseg提取",
+        "reason": "验证BrLP对MCI→AD转化患者的预测能力; 分析分类器对AD患者的预测偏差(023_S_0139显示AD概率递减); 6个月间隔更贴合临床随访频率",
+        "result": "准备中 — 已找到27个converter(E:\\ADNI), 选择8个多访视候选",
+    },
+    {"time": "2026-04-14",
+        "file": "evaluate_verification.py + sampling_bon.py + quality_metrics.py + sampling_roundtrip.py (Section 28)",
+        "change": "验证机制实验完成 — 4个实验(quick_compare/weighted_compare/bon_n8_full/roundtrip_test)全部跑完; BoN Weighted在N=8/10对上SSIM=0.9476>LAS 0.9458(+0.19%), ROI_SSIM=0.8631>0.8625; Round-trip全面失败(8.5x慢, SSIM 0.9383)",
+        "reason": "实现无GT条件下的最优图像选择; 对比6种策略(LAS/Single/BoN best1/topk/weighted/RoundTrip); 在临床关键ROI指标上验证BoN加权融合超越盲目平均",
+        "result": "✅ BoN weighted推荐为默认推理策略; 代码部署于 /home/wangchong/data/fwz/code/verification/",
+    },
+    {"time": "2026-04-14",
+        "file": "run_bon_fullscale.py + sampling_bon_integrated.py (Section 29)",
+        "change": "大规模验证完成 — 50对MCI测试集: LAS SSIM=0.9303 vs BoN SSIM=0.9304; p=0.977 无显著差异; BoN胜率54%; 计算成本高7.5倍",
+        "reason": "小规模实验(5-10对)已验证有效, 需要大规模统计显著性",
+        "result": "✅ 完成 — 两方法表现持平, LAS性价比更高; 瓶颈在模型而非采样策略",
+    },
+    {"time": "2026-04-14",
+        "file": "sampling_et_bon.py + run_et_bon_experiment.py (Section 30)",
+        "change": "Early-Timestep BoN筛选 — 扩散早期步骤评估候选质量,淘汰差的;如16→8→加权融合; 多组合测试(8→3,16→8等); 先小规模验证,再扩大",
+        "reason": "BoN全量生成8张再选太慢; ET在早期就淘汰差候选,节省计算; 参考ICLR2026 Verifier-Threshold方法",
+        "result": "🔄 实现中...",
+    },
 ]
 
 # ─── HTML 模板 ────────────────────────────────────────────────────
@@ -1457,6 +1786,368 @@ HTML = r"""
       <div style="color:var(--dim); font-size:0.9em; padding:8px;">等待 AI 操作...</div>
     {% endif %}
   </div>
+</div>
+
+<!-- ===== MCI→AD 分类预测分析 (Section 24) ===== -->
+<div class="card" style="margin-bottom:14px; border-left: 3px solid #f97316; border-top: 2px solid #f97316;">
+  <h2 style="color:#f97316; font-size:1.1em;">🧠 {{ mci_ad_progress.task_name if mci_ad_progress else 'MCI→AD 分类预测分析' }}</h2>
+  <div style="margin-bottom:10px; display:flex; align-items:center; gap:10px;">
+    <span id="mci-ad-state" class="status-badge status-{{ mci_ad_progress.state if mci_ad_progress else 'idle' }}">
+      {{ mci_ad_progress.state_text if mci_ad_progress else '待启动' }}
+    </span>
+    <span style="color:var(--dim); font-size:0.85em;">
+      数据源: E:\ADNI MCI CSV · 27个MCI→AD转化患者 · 每6个月间隔生成
+    </span>
+  </div>
+
+  <!-- Progress bar -->
+  <div class="bar-outer" style="margin-bottom:12px;">
+    <div id="mci-ad-bar" class="bar-inner" style="width:{{ (mci_ad_progress.completed_subjects / mci_ad_progress.total_subjects * 100) if mci_ad_progress and mci_ad_progress.total_subjects else 0 }}%; background:#f97316;"></div>
+    <span id="mci-ad-label" class="bar-label">
+      患者 {{ mci_ad_progress.completed_subjects if mci_ad_progress else 0 }}/{{ mci_ad_progress.total_subjects if mci_ad_progress else 8 }} 完成
+    </span>
+  </div>
+
+  <!-- Per-subject results table -->
+  <div style="overflow-x:auto; margin-bottom:12px;">
+    <table style="font-size:0.82em; width:100%;">
+      <thead>
+        <tr style="background:rgba(249,115,22,0.1);">
+          <th>受试者 ID</th>
+          <th>访视</th>
+          <th>MCI/AD</th>
+          <th>状态</th>
+          <th>最终预测</th>
+          <th>AD概率趋势</th>
+          <th>Mean SSIM</th>
+        </tr>
+      </thead>
+      <tbody id="mci-ad-table-body">
+        {% if mci_ad_progress and mci_ad_progress.subjects %}
+          {% for sub in mci_ad_progress.subjects %}
+          <tr>
+            <td style="font-weight:600; color:#f97316;">{{ sub.ptid }}</td>
+            <td>{{ sub.n_visits }}</td>
+            <td>{{ sub.mci_visits }}M / {{ sub.ad_visits }}A</td>
+            <td>
+              <span class="status-badge status-{{ sub.state }}">{{ sub.state_text }}</span>
+            </td>
+            <td style="font-weight:600; color:{% if sub.final_class == 'AD' %}var(--green){% elif sub.final_class == 'CN' %}var(--red){% else %}var(--dim){% endif %};">
+              {{ sub.final_class or '—' }}
+            </td>
+            <td style="font-size:0.85em;">
+              {% if sub.ad_prob_trend %}
+                {% for p in sub.ad_prob_trend %}
+                  <span style="color:{% if p >= 0.5 %}var(--green){% elif p >= 0.3 %}var(--yellow){% else %}var(--red){% endif %};">{{ "%.0f"|format(p*100) }}%</span>{% if not loop.last %}→{% endif %}
+                {% endfor %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>{{ "%.4f"|format(sub.mean_ssim) if sub.mean_ssim else '—' }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          {% for sub in mci_ad_subjects_default %}
+          <tr>
+            <td style="font-weight:600; color:#f97316;">{{ sub.ptid }}</td>
+            <td>{{ sub.n_visits }}</td>
+            <td>{{ sub.mci_visits }}M / {{ sub.ad_visits }}A</td>
+            <td><span class="status-badge status-idle">待处理</span></td>
+            <td style="color:var(--dim);">—</td>
+            <td style="color:var(--dim);">—</td>
+            <td style="color:var(--dim);">—</td>
+          </tr>
+          {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Detailed predictions for completed subjects -->
+  {% if mci_ad_progress and mci_ad_progress.subjects %}
+    {% for sub in mci_ad_progress.subjects %}
+      {% if sub.predictions %}
+      <div style="margin-bottom:10px; padding:8px; background:rgba(249,115,22,0.05); border-radius:6px;">
+        <div style="font-weight:600; font-size:0.9em; margin-bottom:6px; color:#f97316;">
+          📊 {{ sub.ptid }} — 逐访视预测详情
+        </div>
+        <table style="font-size:0.8em; width:100%;">
+          <tr style="background:rgba(249,115,22,0.08);">
+            <th>访视</th><th>月份</th><th>真实诊断</th><th>预测</th><th>AD%</th><th>MCI%</th><th>CN%</th><th>SSIM</th>
+          </tr>
+          {% for pred in sub.predictions %}
+          <tr>
+            <td>V{{ pred.visit }}</td>
+            <td>{{ "%.1f"|format(pred.months) }}</td>
+            <td style="color:{% if pred.real_diag == 'AD' %}var(--red){% elif pred.real_diag == 'MCI' %}var(--yellow){% else %}var(--green){% endif %}; font-weight:600;">{{ pred.real_diag }}</td>
+            <td style="color:{% if pred.pred_class == pred.real_diag %}var(--green){% else %}var(--red){% endif %}; font-weight:600;">
+              {{ pred.pred_class }} {% if pred.pred_class == pred.real_diag %}✓{% else %}✗{% endif %}
+            </td>
+            <td style="color:{% if pred.ad_prob >= 0.5 %}var(--green){% elif pred.ad_prob >= 0.3 %}var(--yellow){% else %}var(--red){% endif %};">{{ "%.1f"|format(pred.ad_prob*100) }}%</td>
+            <td>{{ "%.1f"|format(pred.mci_prob*100) }}%</td>
+            <td>{{ "%.1f"|format(pred.cn_prob*100) }}%</td>
+            <td>{{ "%.4f"|format(pred.ssim) if pred.ssim > 0 else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% endif %}
+    {% endfor %}
+  {% endif %}
+
+  <!-- Bias analysis -->
+  <div id="mci-ad-bias-box" style="margin-top:10px; padding:10px; background:rgba(249,115,22,0.05); border-radius:6px;">
+    <div style="font-weight:600; font-size:0.9em; margin-bottom:6px; color:#f97316;">
+      🔍 分类器偏差分析
+    </div>
+    {% if mci_ad_progress and mci_ad_progress.bias_analysis %}
+      <div style="font-size:0.85em;">
+        {% for key, val in mci_ad_progress.bias_analysis.items() %}
+        <div style="margin-bottom:4px;"><strong>{{ key }}:</strong> {{ val }}</div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div style="color:var(--dim); font-size:0.85em;">
+        <div>📌 已知问题 (023_S_0139 AD患者): 分类器预测CN (AD概率 35%→24%→22%→18%)</div>
+        <div>📌 可能原因: ① 训练集中AD样本不足(96/640=15%) ② 体积特征区分力有限 ③ synthseg分割精度 ④ 分类器在MCI/AD边界区域模糊</div>
+        <div>📌 待测试: 更多MCI→AD转化患者的预测模式，分析是否为系统性偏差</div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div style="font-size:0.75em; color:var(--dim); margin-top:8px;">
+    方案: 从ADNI MCI CSV筛选MCI→AD converter · 每6个月间隔生成预测 · 真实数据对照 · GradientBoosting分类器 · 体积特征: cortex/hippocampus/amygdala/white_matter/ventricle
+  </div>
+</div>
+
+<!-- ===== 验证机制实验 (Section 28/29) ===== -->
+<div class="card" style="margin-bottom:14px; border-left: 3px solid #8b5cf6; border-top: 2px solid #8b5cf6;">
+  <h2 style="color:#8b5cf6; font-size:1.1em;">🔬 {{ verify_progress.task_name if verify_progress else '验证机制实验 (Best-of-N / Round-Trip / 大规模验证)' }}</h2>
+  <div style="margin-bottom:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <span class="status-badge status-{{ verify_progress.state if verify_progress else 'idle' }}">
+      {{ verify_progress.state_text if verify_progress else '待启动' }}
+    </span>
+    <span style="color:var(--dim); font-size:0.85em;">
+      目标: 无GT条件下选择最佳生成图像 · BoN Weighted / TopK / Round-Trip · 大规模50对验证
+    </span>
+  </div>
+
+  <!-- BoN Weighted 说明 -->
+  <div style="font-size:0.82em; padding:10px; background:rgba(139,92,246,0.08); border-radius:6px; margin-bottom:12px; line-height:1.6;">
+    <strong style="color:#a78bfa;">💡 BoN Weighted 工作原理:</strong><br>
+    ① 生成N个候选MRI（各自独立去噪）→
+    ② 用5个无GT指标给每个候选打分(源SSIM 40% + 强度一致 20% + 脑覆盖率 15% + 平滑度 15% + 潜变量范数 10%) →
+    ③ 按分数加权融合: 高分候选贡献大、低分贡献小 → 输出1张最优融合MRI<br>
+    <span style="color:var(--green);">vs LAS: 盲目等权平均m个潜变量，坏样本也贡献1/m权重</span>
+  </div>
+
+  <!-- Experiment results table -->
+  <div style="overflow-x:auto; margin-bottom:12px;">
+    <table style="font-size:0.82em; width:100%;">
+      <thead>
+        <tr style="background:rgba(139,92,246,0.1);">
+          <th>实验名称</th>
+          <th>配置</th>
+          <th>状态</th>
+          <th>最佳方法</th>
+          <th>SSIM (LAS)</th>
+          <th>SSIM (最佳)</th>
+          <th>ROI SSIM (LAS)</th>
+          <th>ROI SSIM (最佳)</th>
+          <th>提升</th>
+        </tr>
+      </thead>
+      <tbody id="verify-table-body">
+        {% if verify_progress and verify_progress.experiments %}
+          {% for exp in verify_progress.experiments %}
+          <tr>
+            <td style="font-weight:600; color:#8b5cf6;">{{ exp.name }}</td>
+            <td style="font-size:0.8em; color:var(--dim);">
+              {% if exp.n_pairs %}{{ exp.n_pairs }}对{% else %}—{% endif %}
+              {% if exp.methods %} · {{ exp.methods|length }}法{% endif %}
+            </td>
+            <td>
+              <span class="status-badge status-{{ exp.state }}">{{ exp.state_text }}</span>
+              {% if exp.state == 'running' and exp.get('current_pair') is not none %}
+                <span style="font-size:0.75em; color:var(--dim);">(Pair {{ exp.current_pair }})</span>
+              {% endif %}
+            </td>
+            {% if exp.summary %}
+              {% set las = exp.summary.get('las', {}) %}
+              {% set best_m = exp.best_method %}
+              {% set best = exp.summary.get(best_m, {}) %}
+              <td style="font-weight:600; color:var(--green);">{{ best_m }}</td>
+              <td>{{ "%.4f"|format(las.get('overall_ssim', 0)) }}</td>
+              <td style="font-weight:600; color:{% if best.get('overall_ssim', 0) > las.get('overall_ssim', 0) %}var(--green){% else %}var(--yellow){% endif %};">
+                {{ "%.4f"|format(best.get('overall_ssim', 0)) }}
+              </td>
+              <td>{{ "%.4f"|format(las.get('roi_ssim', 0)) if las.get('roi_ssim') else '—' }}</td>
+              <td style="font-weight:600; color:{% if best.get('roi_ssim', 0) > las.get('roi_ssim', 0) %}var(--green){% else %}var(--yellow){% endif %};">
+                {{ "%.4f"|format(best.get('roi_ssim', 0)) if best.get('roi_ssim') else '—' }}
+              </td>
+              <td style="color:{% if best.get('overall_ssim', 0) > las.get('overall_ssim', 0) %}var(--green){% else %}var(--red){% endif %};">
+                {% if best.get('overall_ssim') and las.get('overall_ssim') %}
+                  {{ "%+.4f"|format(best['overall_ssim'] - las['overall_ssim']) }}
+                  ({{ "%+.1f%%"|format((best['overall_ssim'] - las['overall_ssim']) / las['overall_ssim'] * 100) }})
+                {% else %}—{% endif %}
+              </td>
+            {% else %}
+              <td style="color:var(--dim);">—</td>
+              <td style="color:var(--dim);">—</td>
+              <td style="color:var(--dim);">—</td>
+              <td style="color:var(--dim);">—</td>
+              <td style="color:var(--dim);">—</td>
+              <td style="color:var(--dim);">—</td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="9" style="color:var(--dim); text-align:center; padding:12px;">
+              实验尚未启动 — 等待代码上传到服务器并运行
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Completed experiments: all methods comparison table -->
+  {% if verify_progress and verify_progress.completed_results %}
+  <div style="overflow-x:auto; margin-bottom:12px;">
+    <div style="font-weight:600; font-size:0.9em; color:#8b5cf6; margin-bottom:6px;">📊 方法对比总表 (最大规模实验)</div>
+    {% set cr = verify_progress.completed_results %}
+    {% set big = cr.get('fullscale_50', cr.get('bon_n8_full', cr.get('weighted_compare', {}))) %}
+    {% if big %}
+    <table style="font-size:0.82em; width:100%;">
+      <thead>
+        <tr style="background:rgba(139,92,246,0.15);">
+          <th>方法</th><th>SSIM</th><th>SSIM Std</th><th>PSNR</th><th>MAE</th>
+          <th>ROI SSIM</th><th>Hipp SSIM</th><th>Time/pair</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for method_name in ['las', 'single', 'bon_best1', 'bon_topk', 'bon_weighted', 'roundtrip_bon'] %}
+          {% if method_name in big %}
+          {% set m = big[method_name] %}
+          <tr style="{% if method_name == 'bon_weighted' %}background:rgba(74,222,128,0.1);{% endif %}">
+            <td style="font-weight:600; {% if method_name == 'bon_weighted' %}color:var(--green);{% endif %}">
+              {{ method_name }}{% if method_name == 'bon_weighted' %} ⭐{% endif %}
+            </td>
+            <td>{{ "%.4f"|format(m.overall_ssim) }}</td>
+            <td style="font-size:0.8em; color:var(--dim);">±{{ "%.4f"|format(m.overall_ssim_std) }}</td>
+            <td>{{ "%.2f"|format(m.overall_psnr) }}</td>
+            <td>{{ "%.4f"|format(m.overall_mae) }}</td>
+            <td>{{ "%.4f"|format(m.roi_ssim) if m.roi_ssim else '—' }}</td>
+            <td>{{ "%.4f"|format(m.hippocampus_ssim) if m.hippocampus_ssim else '—' }}</td>
+            <td>{{ "%.1f"|format(m.time_sec) }}s</td>
+          </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Runner log tail -->
+  {% if verify_progress and verify_progress.log_tail %}
+  <div style="margin-top:10px;">
+    <div style="font-weight:600; font-size:0.85em; color:#8b5cf6; margin-bottom:4px;">📋 运行日志 (最近)</div>
+    <pre style="max-height:200px; overflow-y:auto; font-size:0.75em;">{{ verify_progress.log_tail }}</pre>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ===== ET-BoN 早期时间步筛选实验 (Section 30) ===== -->
+<div class="card" style="margin-bottom:14px; border-left: 3px solid #f59e0b; border-top: 2px solid #f59e0b;">
+  <h2 style="color:#f59e0b; font-size:1.1em;">⚡ {{ et_bon_progress.task_name if et_bon_progress else 'ET-BoN 早期时间步筛选实验' }}</h2>
+  <div style="margin-bottom:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <span class="status-badge status-{{ et_bon_progress.state if et_bon_progress else 'idle' }}">
+      {{ et_bon_progress.state_text if et_bon_progress else '待启动' }}
+    </span>
+    <span style="color:var(--dim); font-size:0.85em;">
+      核心思路: 生成N候选 → 早期步骤(step 10/50)评估 → 淘汰差的 → K个幸存者完成去噪 → 加权融合
+    </span>
+  </div>
+
+  <!-- ET-BoN 原理说明 -->
+  <div style="font-size:0.82em; padding:10px; background:rgba(245,158,11,0.08); border-radius:6px; margin-bottom:12px; line-height:1.6;">
+    <strong style="color:#fbbf24;">💡 ET-BoN 工作原理:</strong><br>
+    Phase 1: N个候选 × checkpoint_step步 (早期去噪) →
+    Phase 2: 解码中间latent评分，淘汰最差N-K个 →
+    Phase 3: K个幸存者 × remaining步 (完成去噪) →
+    Phase 4: K个最终图像加权融合<br>
+    <span style="color:var(--green);">节省算力: 8→3@cp10 = 200步 vs BoN 400步 (省50%); 16→4@cp10 = 320步 vs 800步 (省60%)</span>
+  </div>
+
+  <!-- LAS Baseline -->
+  {% if et_bon_progress and et_bon_progress.las_baseline and et_bon_progress.las_baseline.avg_ssim %}
+  <div style="font-size:0.85em; margin-bottom:10px; padding:8px; background:rgba(100,100,100,0.1); border-radius:4px;">
+    <strong>LAS M=3 Baseline:</strong>
+    SSIM={{ "%.4f"|format(et_bon_progress.las_baseline.avg_ssim) }}
+    MAE={{ "%.4f"|format(et_bon_progress.las_baseline.avg_mae) }}
+    Time={{ "%.1f"|format(et_bon_progress.las_baseline.avg_time) }}s
+  </div>
+  {% endif %}
+
+  <!-- Config results table -->
+  <div style="overflow-x:auto; margin-bottom:12px;">
+    <table style="font-size:0.82em; width:100%;">
+      <thead>
+        <tr style="background:rgba(245,158,11,0.1);">
+          <th>配置</th><th>N→K</th><th>检查点</th><th>SSIM</th><th>MAE</th>
+          <th>vs LAS胜率</th><th>p-value</th><th>节省步数</th><th>耗时</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if et_bon_progress and et_bon_progress.configs_tested %}
+          {% for cfg in et_bon_progress.configs_tested %}
+          <tr style="{% if et_bon_progress.best_config == cfg.name %}background:rgba(74,222,128,0.1);{% endif %}">
+            <td style="font-weight:600; color:#f59e0b;">
+              {{ cfg.name }}{% if et_bon_progress.best_config == cfg.name %} ⭐{% endif %}
+            </td>
+            <td>{{ cfg.name.split('_')[1] if '_' in cfg.name else '—' }}</td>
+            <td>step {{ cfg.name.split('cp')[-1] if 'cp' in cfg.name else '10' }}</td>
+            <td style="font-weight:600; color:{% if et_bon_progress.las_baseline and cfg.avg_ssim > et_bon_progress.las_baseline.avg_ssim %}var(--green){% else %}var(--yellow){% endif %};">
+              {{ "%.4f"|format(cfg.avg_ssim) }}
+            </td>
+            <td>{{ "%.4f"|format(cfg.avg_mae) }}</td>
+            <td style="color:{% if cfg.vs_las_win_rate > 55 %}var(--green){% elif cfg.vs_las_win_rate < 45 %}var(--red){% else %}var(--yellow){% endif %};">
+              {{ cfg.vs_las_win_rate }}%
+            </td>
+            <td style="font-size:0.8em;">{{ cfg.vs_las_p_value if cfg.vs_las_p_value else '—' }}</td>
+            <td style="color:var(--green);">{{ cfg.step_savings }}%</td>
+            <td>{{ "%.1f"|format(cfg.avg_time) }}s</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="9" style="color:var(--dim); text-align:center; padding:12px;">
+              实验尚未启动 — 代码已准备，等待上传服务器并运行
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Current progress -->
+  {% if et_bon_progress and et_bon_progress.state == 'running' %}
+  <div style="font-size:0.85em; margin-bottom:8px;">
+    当前: <strong style="color:#f59e0b;">{{ et_bon_progress.current_config }}</strong>
+    · Pair {{ et_bon_progress.current_pair }}/{{ et_bon_progress.total_pairs }}
+  </div>
+  {% endif %}
+
+  <!-- Log tail -->
+  {% if et_bon_progress and et_bon_progress.log_tail %}
+  <div style="margin-top:10px;">
+    <div style="font-weight:600; font-size:0.85em; color:#f59e0b; margin-bottom:4px;">📋 运行日志</div>
+    <pre style="max-height:150px; overflow-y:auto; font-size:0.75em;">{{ et_bon_progress.log_tail }}</pre>
+  </div>
+  {% endif %}
 </div>
 
 <!-- ===== TPN 任务进度（优先级1） ===== -->
@@ -2313,6 +3004,46 @@ function renderMethodProgress(prefix, data) {
   if (psnrEl) psnrEl.textContent = ep.psnr_mean ? ep.psnr_mean.toFixed(2) : 'N/A';
 }
 
+function renderMciAdProgress(data) {
+  if (!data) return;
+  const stateEl = document.getElementById('mci-ad-state');
+  if (stateEl) {
+    stateEl.textContent = data.state_text || '待启动';
+    stateEl.className = 'status-badge status-' + (data.state || 'idle');
+  }
+  const bar = document.getElementById('mci-ad-bar');
+  const total = data.total_subjects || 8;
+  const completed = data.completed_subjects || 0;
+  if (bar) bar.style.width = String(completed / total * 100) + '%';
+  const label = document.getElementById('mci-ad-label');
+  if (label) label.textContent = `患者 ${completed}/${total} 完成`;
+  // Update table body
+  const tbody = document.getElementById('mci-ad-table-body');
+  if (tbody && data.subjects && data.subjects.length > 0) {
+    let html = '';
+    data.subjects.forEach(sub => {
+      const finalColor = sub.final_class === 'AD' ? 'var(--green)' : sub.final_class === 'CN' ? 'var(--red)' : 'var(--dim)';
+      let trend = '—';
+      if (sub.ad_prob_trend && sub.ad_prob_trend.length > 0) {
+        trend = sub.ad_prob_trend.map(p => {
+          const color = p >= 0.5 ? 'var(--green)' : p >= 0.3 ? 'var(--yellow)' : 'var(--red)';
+          return `<span style="color:${color};">${Math.round(p*100)}%</span>`;
+        }).join('→');
+      }
+      html += `<tr>
+        <td style="font-weight:600; color:#f97316;">${sub.ptid}</td>
+        <td>${sub.n_visits}</td>
+        <td>${sub.mci_visits}M / ${sub.ad_visits}A</td>
+        <td><span class="status-badge status-${sub.state}">${sub.state_text}</span></td>
+        <td style="font-weight:600; color:${finalColor};">${sub.final_class || '—'}</td>
+        <td style="font-size:0.85em;">${trend}</td>
+        <td>${sub.mean_ssim ? sub.mean_ssim.toFixed(4) : '—'}</td>
+      </tr>`;
+    });
+    tbody.innerHTML = html;
+  }
+}
+
 function tickRefresh() {
   fetch('/api/refresh')
     .then(r => r.json())
@@ -2334,6 +3065,7 @@ function tickRefresh() {
       renderMethodProgress('mb', d.method_b_progress || null);
       renderMethodProgress('mc', d.method_c_progress || null);
       renderMethodProgress('md', d.method_d_progress || null);
+      renderMciAdProgress(d.mci_ad_progress || null);
       renderAiLog(d.ai_operations || []);
       renderProjectChanges(d.project_changes || null);
     })
@@ -2438,6 +3170,9 @@ def index():
     method_b_progress = _cache["method_b_progress"] or {}
     method_c_progress = _cache["method_c_progress"] or {}
     method_d_progress = _cache["method_d_progress"] or {}
+    mci_ad_progress = _cache["mci_ad_progress"] or {}
+    verify_progress = _cache["verify_progress"] or {}
+    et_bon_progress = _cache["et_bon_progress"] or {}
     project_changes = _cache["project_changes"] or {}
     connected = info.get("status") == "connected"
     gpus = parse_gpu(info.get("gpu_raw", ""))
@@ -2468,6 +3203,10 @@ def index():
         method_b_progress=method_b_progress,
         method_c_progress=method_c_progress,
         method_d_progress=method_d_progress,
+        mci_ad_progress=mci_ad_progress,
+        mci_ad_subjects_default=MCI_AD_SUBJECTS,
+        verify_progress=verify_progress,
+        et_bon_progress=et_bon_progress,
         project_changes=project_changes,
         ai_operations=ai_ops,
         metrics_table=build_metrics_table(),
@@ -2490,6 +3229,9 @@ def api_refresh():
     method_b_progress = _cache["method_b_progress"] or {}
     method_c_progress = _cache["method_c_progress"] or {}
     method_d_progress = _cache["method_d_progress"] or {}
+    mci_ad_progress = _cache["mci_ad_progress"] or {}
+    verify_progress = _cache["verify_progress"] or {}
+    et_bon_progress = _cache["et_bon_progress"] or {}
     project_changes = _cache["project_changes"] or {}
     with _ai_ops_lock:
         ai_ops = list(_ai_operations)
@@ -2511,6 +3253,9 @@ def api_refresh():
         "method_b_progress": method_b_progress,
         "method_c_progress": method_c_progress,
         "method_d_progress": method_d_progress,
+        "mci_ad_progress": mci_ad_progress,
+        "verify_progress": verify_progress,
+        "et_bon_progress": et_bon_progress,
         "project_changes": project_changes,
         "ai_operations": ai_ops,
     })

@@ -1,0 +1,228 @@
+# BrLP 改进模型架构图 — 图像生成提示词
+## 用于 Banana2 / Gemini 3 Pro 等图像生成工具
+
+---
+
+Create a clean, professional academic architecture diagram for a journal paper figure. White background, vector illustration style, English labels with some mathematical notation. High resolution, suitable for IEEE TMI / Medical Image Analysis publication.
+
+## Overall Layout
+
+Horizontal flow (left to right), three main rows:
+- **Top row**: Main inference pipeline (Input → Encoding → Denoising → Decoding → Output)
+- **Middle row**: Auxiliary model + conditioning details
+- **Bottom row**: Training-only components and loss functions
+
+Total figure size: approximately 18cm × 10cm (double-column journal width).
+
+## Color Scheme
+
+- **Main pipeline flow**: Deep blue (#2C5F8A) boxes and arrows
+- **AutoEncoder**: Teal/Green (#2E8B6E) — solid border
+- **ControlNet**: Orange (#D4762C) — solid border
+- **UNet / Diffusion**: Dark blue (#1E3A6D) — solid border
+- **Auxiliary Model**: Purple (#6B4C9A) — solid border
+- **Innovation modules**: Dashed borders with color-coded labels
+  - Innovation 1 (Dynamic Condition): Teal dashed
+  - Innovation 2 (BTR): Orange dashed
+  - Innovation 4 (3D Perception): Green dashed
+  - Innovation 5 (Region Weighting): Purple-red dashed
+- **ET-BoN Sampling**: Gold (#B8860B) — dashed border
+- **Background**: Pure white
+- **Text**: Black with blue/teal accents for key terms
+- **Arrows**: Dark gray, thin, with arrowheads
+
+## Detailed Component Specification
+
+### 1. INPUT BLOCK (Far Left)
+
+**Shape**: Rounded rectangle with a small 3D brain volume icon inside
+**Label**: "Baseline MRI $x_{t_1}$"
+**Annotation below**: "$x_{t_1} \in \mathbb{R}^{1 \times 120 \times 144 \times 120}$"
+**Sub-label**: "3D T1w MRI at time $t_1$"
+**Color**: Light gray background, blue border
+
+### 2. ENCODER BLOCK
+
+**Shape**: Trapezoid (wide top, narrow bottom) in teal
+**Label**: "3D Encoder $\mathcal{E}$"
+**Internal annotation**:
+- "Channels: 64→128→128→128"
+- "3× downsampling"
+- Gray fill indicating "Frozen weights"
+**Output arrow pointing right with label**:
+- "$z_{t_1} \in \mathbb{R}^{3 \times 15 \times 18 \times 15}$"
+- "Baseline latent representation"
+
+### 3. CONTROLNET BLOCK (Below/Right of Encoder)
+
+**Shape**: Rounded rectangle with orange border
+**Label**: "ControlNet"
+**Two input arrows converging into it**:
+
+**Input A (from top - Spatial Condition)**:
+- Small box: "Spatial Condition"
+- Formula: "$c_{spatial} = [z_{t_1} \| \text{age}_{t_1}]$"
+- Shape: "$4 \times 16 \times 20 \times 16$"
+- Show the latent $z_{t_1}$ (3 channels) concatenated with age broadcast map (1 channel)
+
+**Innovation 1 box** (teal dashed border, small badge):
+- Label: "Inn. 1: Dynamic MCI Conditioning"
+- Shows extension: "+2ch (atrophy rate + ventricle expansion)"
+- Result: "$6 \times 16 \times 20 \times 16$"
+
+**Input B (from bottom - Cross-Attention Context)**:
+- Small box: "Clinical Context $c_{ctx}$"
+- Formula: "$c_{ctx} = [\text{age}, \text{sex}, \text{dx}, v_1, v_2, v_3, v_4, v_5]$"
+- Annotation: "8-dim vector from Leaspy auxiliary model"
+- Where $v_i$ = predicted regional volumes (cortex, hippocampus, amygdala, white matter, ventricle)
+
+**Output**: Multiple arrows labeled "Multi-scale skip connections" going into UNet decoder levels
+
+### 4. DIFFUSION UNET (Center, Largest Block)
+
+**Shape**: Large rounded rectangle, dark blue
+**Label**: "3D DiffusionModelUNet"
+**Internal structure shown vertically**:
+
+Left side (Encoder path, top to bottom):
+- Block: "256" (no attention)
+- Block: "512" (self+cross attention)
+- Block: "768" (self+cross attention)
+
+Right side (Decoder path, bottom to top):
+- Block: "768 → 512 → 256"
+- At each decoder level, show teal dotted arrows from ControlNet entering as skip connections
+
+**Center**: Bottleneck "768"
+
+**Inputs**:
+- From left: "Noisy latent $z_T^{(t)}$" with noise symbol
+- From top: "Timestep $t$"
+- From ControlNet: "Skip connections"
+- Cross-attention: "$c_{ctx}$"
+
+**Output**: "Predicted noise $\hat{\epsilon}_\theta$"
+
+**Annotation box below UNet**:
+- "Train: DDPM (T=1000)"
+- "Infer: DDIM (T=50)"
+
+### 5. INNOVATION 2: BTR (Below UNet)
+
+**Shape**: Rounded rectangle with orange dashed border
+**Label**: "Innovation 2: Bidirectional Temporal Regularization (BTR)"
+
+**Show two parallel paths**:
+
+Path 1 (solid arrow, left to right):
+- "$\mathcal{L}_{fwd} = \text{MSE}(\hat{\epsilon}, \epsilon)$"
+- Label: "Forward: $t_1 \to t_2$"
+
+Path 2 (dashed arrow, right to left):
+- "$\mathcal{L}_{bwd} = \text{MSE}(\hat{\epsilon}^{rev}, \epsilon^{rev})$"
+- Label: "Backward: $t_2 \to t_1$"
+
+**Combined loss box**:
+- "$\mathcal{L}_{total} = \mathcal{L}_{fwd} + \lambda \cdot \mathcal{L}_{bwd}$, $\lambda=0.5$"
+- "Shared ControlNet weights, both directions"
+
+### 6. DDIM SAMPLING + ET-BoN (Right of UNet)
+
+**Shape**: Rounded rectangle with gold dashed border
+**Label**: "DDIM Sampling + ET-BoN"
+
+**Show the ET-BoN process as a flowchart**:
+
+Step 1: "Generate N=8 candidate noises $z_T^{(1)}, ..., z_T^{(N)}$"
+↓
+Step 2: "All candidates denoise in parallel for $t_{cp}=10$ steps"
+↓
+Step 3: "Score intermediate latents → keep top-K=5 survivors"
+↓
+Step 4: "Survivors complete remaining 40 steps"
+↓
+Step 5: "Weighted fusion → final $\hat{z}_{t_2}$"
+
+**Annotation**: "30% compute savings vs standard BoN"
+
+### 7. DECODER BLOCK (Right side)
+
+**Shape**: Trapezoid (narrow left, wide right) in teal
+**Label**: "Improved 3D Decoder $\mathcal{D}$"
+**Internal details**:
+- "Channels: 128→128→128→64→1"
+- "3× upsampling"
+
+**Innovation 4 badge** (green dashed):
+- "Inn. 4: 3D MedicalNet Perceptual Loss"
+- Small icon showing 3D feature matching
+
+**Innovation 5 badge** (purple-red dashed):
+- "Inn. 5: Region-Weighted Reconstruction"
+- Small icon showing hippocampus region with higher weight
+
+**Output arrow** pointing to:
+
+### 8. OUTPUT BLOCK (Far Right)
+
+**Shape**: Rounded rectangle with 3D brain volume icon
+**Label**: "Predicted Follow-up MRI $\hat{x}_{t_2}$"
+**Annotation**: "$\hat{x}_{t_2} \in \mathbb{R}^{1 \times 120 \times 144 \times 120}$"
+**Sub-label**: "Predicted brain at target age $t_2$"
+
+### 9. AUXILIARY MODEL (Bottom Center)
+
+**Shape**: Rounded rectangle, purple
+**Label**: "Leaspy Auxiliary Model"
+**Internal**: "Logistic progression model"
+**Inputs** (from left):
+- "Longitudinal clinical data"
+- "SynthSeg regional volumes"
+**Process**:
+- "Personalize → Estimate future trajectories"
+- Separate models: "CN / MCI / AD"
+**Output** (arrow going up to ControlNet):
+- "Predicted covariates at $t_2$: $[v_1, v_2, v_3, v_4, v_5]$"
+- "Regional volume trajectories"
+
+### 10. LEGEND BOX (Bottom Right Corner)
+
+Small legend showing:
+- Solid blue border: "Baseline BrLP components"
+- Teal dashed: "Innovation 1: Dynamic MCI Conditioning"
+- Orange dashed: "Innovation 2: BTR"
+- Green dashed: "Innovation 4: 3D Perceptual Loss"
+- Purple-red dashed: "Innovation 5: Region-Weighted Reconstruction"
+- Gold dashed: "ET-BoN Sampling Strategy"
+- Gray fill: "Frozen weights"
+- White fill: "Trainable weights"
+
+## Key Visual Emphasis
+
+1. **Main data flow**: Thick blue arrows from left (Input MRI) to right (Predicted MRI)
+2. **ControlNet conditioning**: Teal dotted lines from ControlNet to each UNet decoder level
+3. **BTR bidirectional arrows**: Show forward (solid) and backward (orange dashed) clearly
+4. **ET-BoN filtering**: Visually show N candidates being narrowed down to K survivors
+5. **Innovation badges**: Small colored tags on innovation modules for quick identification
+6. **Tensor shapes**: Annotated at key points (input, latent, output)
+7. **Compact and readable**: All text should be legible at 100% zoom in a two-column journal layout
+
+## Mathematical Notation to Include
+
+- $x_{t_1}$: Baseline MRI at time $t_1$
+- $\hat{x}_{t_2}$: Predicted follow-up MRI at time $t_2$
+- $z_{t_1} = \mathcal{E}(x_{t_1})$: Encoded latent
+- $c_{spatial} = [z_{t_1} \| \text{age}_{t_1}]$: Spatial condition (4ch or 6ch)
+- $c_{ctx} = [\text{age}, \text{sex}, \text{dx}, v_1, ..., v_5]$: Cross-attention context
+- $\mathcal{L} = \mathcal{L}_{fwd} + \lambda \mathcal{L}_{bwd}$: BTR loss
+- ET-BoN: $N \to K$ candidate filtering at checkpoint step
+
+## Communication Goal
+
+The figure should clearly convey:
+"We enhance the BrLP brain aging prediction framework with five key innovations:
+(1) dynamic MCI-specific conditioning,
+(2) bidirectional temporal regularization for structural consistency,
+(3) 3D perceptual loss for anatomical fidelity,
+(4) region-weighted reconstruction emphasizing hippocampus,
+and (5) ET-BoN sampling for efficient quality-aware generation."

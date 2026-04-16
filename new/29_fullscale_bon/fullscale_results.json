@@ -1,0 +1,720 @@
+{
+  "config": {
+    "n_candidates": 8,
+    "las_m": 3,
+    "max_pairs": 50,
+    "scale_factor": 1.0469,
+    "csv": "/home/wangchong/data/fwz/output/innovation_5/prepared/B_mci.csv",
+    "cnet": "/home/wangchong/data/fwz/output/innovation_2/controlnet/cnet-btr-ep-1.pth",
+    "timestamp": "2026-04-14T16:26:10.369160"
+  },
+  "summary": {
+    "las": {
+      "overall_ssim": 0.927278546865523,
+      "overall_ssim_std": 0.02338249138856695,
+      "overall_psnr": 26.489986072479244,
+      "overall_psnr_std": 1.9801979084536592,
+      "overall_mae": 0.03005118914820288,
+      "overall_mae_std": 0.01041557408335345,
+      "time_sec": 5.719697257746821,
+      "time_sec_std": 0.2447762035651901,
+      "roi_ssim": 0.5524482246076513,
+      "roi_ssim_std": 0.023294987781406404,
+      "hippocampus_ssim": 0.5555925644928407,
+      "hippocampus_ssim_std": 0.02004008678682627,
+      "roi_mae": 0.078809701230215,
+      "hippocampus_mae": 0.08453049399678748
+    },
+    "bon_weighted": {
+      "overall_ssim": 0.9250605143243265,
+      "overall_ssim_std": 0.025954863662381304,
+      "overall_psnr": 26.274656044321556,
+      "overall_psnr_std": 2.187149165971953,
+      "overall_mae": 0.03213978104334875,
+      "overall_mae_std": 0.01106961304393518,
+      "time_sec": 42.716328247733735,
+      "time_sec_std": 1.5122760406512887,
+      "roi_ssim": 0.552258314109809,
+      "roi_ssim_std": 0.024666176423598564,
+      "hippocampus_ssim": 0.5542896558883181,
+      "hippocampus_ssim_std": 0.02150788795581515,
+      "roi_mae": 0.07842896522387215,
+      "hippocampus_mae": 0.08270748809626724
+    }
+  },
+  "per_pair": [
+    {
+      "pair_idx": 27,
+      "subject_id": "002_S_1070",
+      "las": {
+        "overall_ssim": 0.9135889198146888,
+        "overall_psnr": 26.363002760857395,
+        "overall_mae": 0.03392010402725051,
+        "hippocampus_mae": 0.0782517755181244,
+        "hippocampus_ssim": 0.577005594650868,
+        "amygdala_mae": 0.06385578522098934,
+        "amygdala_ssim": 0.5423089330577766,
+        "roi_ssim": 0.5260648099699351,
+        "roi_mae": 0.07443229854106903,
+        "time_sec": 5.6526877880096436
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9100471976880831,
+        "overall_psnr": 25.59901516957285,
+        "overall_mae": 0.036189261198376226,
+        "hippocampus_mae": 0.07812278416592071,
+        "hippocampus_ssim": 0.5753559307702079,
+        "amygdala_mae": 0.07133958459923707,
+        "amygdala_ssim": 0.552853136356845,
+        "roi_ssim": 0.5342203498800495,
+        "roi_mae": 0.07632309198379517,
+        "time_sec": 40.24826979637146
+      },
+      "winner_ssim": "las"
+    },
+    {
+      "pair_idx": 28,
+      "subject_id": "002_S_1070",
+      "las": {
+        "overall_ssim": 0.9463172364764193,
+        "overall_psnr": 28.176277919597364,
+        "overall_mae": 0.01847548861068693,
+        "hippocampus_mae": 0.07080578707790902,
+        "hippocampus_ssim": 0.5346050733220326,
+        "amygdala_mae": 0.061967555163749334,
+        "amygdala_ssim": 0.5412032284503937,
+        "roi_ssim": 0.5106588353362959,
+        "roi_mae": 0.06848204135894775,
+        "time_sec": 5.406184434890747
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9507199666929964,
+        "overall_psnr": 29.247352064117646,
+        "overall_mae": 0.015387752266256357,
+        "hippocampus_mae": 0.07423394035002695,
+        "hippocampus_ssim": 0.5341192397246997,
+        "amygdala_mae": 0.05192729364438303,
+        "amygdala_ssim": 0.5472023973818549,
+        "roi_ssim": 0.5106432246647278,
+        "roi_mae": 0.06836909055709839,
+        "time_sec": 40.14826512336731
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 29,
+      "subject_id": "002_S_1070",
+      "las": {
+        "overall_ssim": 0.928480336399452,
+        "overall_psnr": 26.86096819579816,
+        "overall_mae": 0.022023593840067857,
+        "hippocampus_mae": 0.07103626218480644,
+        "hippocampus_ssim": 0.5705431319808334,
+        "amygdala_mae": 0.05145366401631433,
+        "amygdala_ssim": 0.542040074718426,
+        "roi_ssim": 0.5149594574829534,
+        "roi_mae": 0.0658406987786293,
+        "time_sec": 5.36099100112915
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.936539372171224,
+        "overall_psnr": 27.533520387913942,
+        "overall_mae": 0.018803345447896167,
+        "hippocampus_mae": 0.07563704644403174,
+        "hippocampus_ssim": 0.5601054019017475,
+        "amygdala_mae": 0.05208112459325995,
+        "amygdala_ssim": 0.5558842591181343,
+        "roi_ssim": 0.526799029776488,
+        "roi_mae": 0.06938730180263519,
+        "time_sec": 40.141581773757935
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 30,
+      "subject_id": "002_S_1070",
+      "las": {
+        "overall_ssim": 0.9406372281401989,
+        "overall_psnr": 27.47877781440367,
+        "overall_mae": 0.021478719104765738,
+        "hippocampus_mae": 0.07437315081134761,
+        "hippocampus_ssim": 0.5824777719294858,
+        "amygdala_mae": 0.06382244143619047,
+        "amygdala_ssim": 0.5540972020571678,
+        "roi_ssim": 0.5378110789419348,
+        "roi_mae": 0.0715738907456398,
+        "time_sec": 5.442056655883789
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.943116432242713,
+        "overall_psnr": 28.069444055988193,
+        "overall_mae": 0.018619392749449164,
+        "hippocampus_mae": 0.0788907829743694,
+        "hippocampus_ssim": 0.5727311586617564,
+        "amygdala_mae": 0.05105545532294097,
+        "amygdala_ssim": 0.5501022198415323,
+        "roi_ssim": 0.5294865490186119,
+        "roi_mae": 0.07150563597679138,
+        "time_sec": 41.094571113586426
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 31,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.9380539933410923,
+        "overall_psnr": 28.18185222978667,
+        "overall_mae": 0.02760458106336506,
+        "hippocampus_mae": 0.07457200851325595,
+        "hippocampus_ssim": 0.5529385689486014,
+        "amygdala_mae": 0.04838951201763172,
+        "amygdala_ssim": 0.5680175922630629,
+        "roi_ssim": 0.5626183578260414,
+        "roi_mae": 0.06721672415733337,
+        "time_sec": 5.400824308395386
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9326400957294738,
+        "overall_psnr": 27.14713265052202,
+        "overall_mae": 0.03248608598065942,
+        "hippocampus_mae": 0.07404818084512464,
+        "hippocampus_ssim": 0.5517090374036521,
+        "amygdala_mae": 0.0702609270811081,
+        "amygdala_ssim": 0.5413510455965841,
+        "roi_ssim": 0.5592095224702704,
+        "roi_mae": 0.0729842483997345,
+        "time_sec": 40.88563823699951
+      },
+      "winner_ssim": "las"
+    },
+    {
+      "pair_idx": 32,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.9038077091965858,
+        "overall_psnr": 23.926040327845946,
+        "overall_mae": 0.031101806643595884,
+        "hippocampus_mae": 0.07463290647480839,
+        "hippocampus_ssim": 0.55605416109333,
+        "amygdala_mae": 0.06003814263814559,
+        "amygdala_ssim": 0.5445323291589109,
+        "roi_ssim": 0.5667956134418777,
+        "roi_mae": 0.07050353288650513,
+        "time_sec": 5.60912299156189
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.895790284420946,
+        "overall_psnr": 23.1749456407732,
+        "overall_mae": 0.03759418708084487,
+        "hippocampus_mae": 0.07683158429671627,
+        "hippocampus_ssim": 0.5496814868549809,
+        "amygdala_mae": 0.0533938436295054,
+        "amygdala_ssim": 0.5397959097892117,
+        "roi_ssim": 0.5602653829906504,
+        "roi_mae": 0.07020022720098495,
+        "time_sec": 42.748656272888184
+      },
+      "winner_ssim": "las"
+    },
+    {
+      "pair_idx": 33,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.9529294466349756,
+        "overall_psnr": 28.06312521067245,
+        "overall_mae": 0.022364127243786634,
+        "hippocampus_mae": 0.0901421406935501,
+        "hippocampus_ssim": 0.5484300339835916,
+        "amygdala_mae": 0.05757676897230089,
+        "amygdala_ssim": 0.5184983058985463,
+        "roi_ssim": 0.5555210292018317,
+        "roi_mae": 0.08122488856315613,
+        "time_sec": 5.7515668869018555
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9523274889349705,
+        "overall_psnr": 29.71229295178145,
+        "overall_mae": 0.018920461424110486,
+        "hippocampus_mae": 0.0784875230991328,
+        "hippocampus_ssim": 0.517009175580864,
+        "amygdala_mae": 0.05089289034110565,
+        "amygdala_ssim": 0.5047225133481095,
+        "roi_ssim": 0.5259134996347573,
+        "roi_mae": 0.07093138247728348,
+        "time_sec": 42.73602628707886
+      },
+      "winner_ssim": "las"
+    },
+    {
+      "pair_idx": 34,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.948926957932107,
+        "overall_psnr": 28.93079162493664,
+        "overall_mae": 0.02003170184237464,
+        "hippocampus_mae": 0.07342990887631114,
+        "hippocampus_ssim": 0.5339213276973102,
+        "amygdala_mae": 0.059546292655997805,
+        "amygdala_ssim": 0.4858161082636374,
+        "roi_ssim": 0.538844836113065,
+        "roi_mae": 0.06951591372489929,
+        "time_sec": 5.695767641067505
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9339232279736162,
+        "overall_psnr": 25.645503147740115,
+        "overall_mae": 0.03590746779906348,
+        "hippocampus_mae": 0.08340243271594185,
+        "hippocampus_ssim": 0.5532478085363121,
+        "amygdala_mae": 0.10571351866052335,
+        "amygdala_ssim": 0.5342249662632513,
+        "roi_ssim": 0.5597777330907202,
+        "roi_mae": 0.08969226479530334,
+        "time_sec": 42.90783500671387
+      },
+      "winner_ssim": "las"
+    },
+    {
+      "pair_idx": 35,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.9179349734318626,
+        "overall_psnr": 26.189848505322463,
+        "overall_mae": 0.04026376345979287,
+        "hippocampus_mae": 0.09112062352367595,
+        "hippocampus_ssim": 0.5621434472375078,
+        "amygdala_mae": 0.05651556418374811,
+        "amygdala_ssim": 0.5445910830414119,
+        "roi_ssim": 0.5717199991214371,
+        "roi_mae": 0.08183608949184418,
+        "time_sec": 5.681431770324707
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9009603807098486,
+        "overall_psnr": 26.67548978223884,
+        "overall_mae": 0.04090071737277151,
+        "hippocampus_mae": 0.07290980873934441,
+        "hippocampus_ssim": 0.5704244036441602,
+        "amygdala_mae": 0.04378404823403582,
+        "amygdala_ssim": 0.5496571646023305,
+        "roi_ssim": 0.579781569963638,
+        "roi_mae": 0.06509536504745483,
+        "time_sec": 42.93865990638733
+      },
+      "winner_ssim": "las"
+    },
+    {
+      "pair_idx": 36,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.900446011170538,
+        "overall_psnr": 23.507320171797225,
+        "overall_mae": 0.036083532506312986,
+        "hippocampus_mae": 0.07693649737756382,
+        "hippocampus_ssim": 0.5669225120874567,
+        "amygdala_mae": 0.061679728724399106,
+        "amygdala_ssim": 0.5250222050212402,
+        "roi_ssim": 0.5750124317463702,
+        "roi_mae": 0.07261982560157776,
+        "time_sec": 5.661626577377319
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.8806972324701419,
+        "overall_psnr": 21.598649478056405,
+        "overall_mae": 0.0499858660983484,
+        "hippocampus_mae": 0.09000351393176603,
+        "hippocampus_ssim": 0.5572457467383501,
+        "amygdala_mae": 0.05517446397564032,
+        "amygdala_ssim": 0.5067344297115216,
+        "roi_ssim": 0.5649802651550782,
+        "roi_mae": 0.08014915138483047,
+        "time_sec": 42.71437454223633
+      },
+      "winner_ssim": "las"
+    },
+    {
+      "pair_idx": 37,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.950945238865235,
+        "overall_psnr": 27.787216870423208,
+        "overall_mae": 0.01852078832991021,
+        "hippocampus_mae": 0.09126797863622992,
+        "hippocampus_ssim": 0.5285645002052028,
+        "amygdala_mae": 0.0573720436474381,
+        "amygdala_ssim": 0.4871901775582735,
+        "roi_ssim": 0.5335699679559989,
+        "roi_mae": 0.08198637515306473,
+        "time_sec": 5.748690605163574
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9539774336012053,
+        "overall_psnr": 28.310457660885504,
+        "overall_mae": 0.017571342773143834,
+        "hippocampus_mae": 0.08324181360304009,
+        "hippocampus_ssim": 0.5573365587143744,
+        "amygdala_mae": 0.05411653664322604,
+        "amygdala_ssim": 0.5218572117457562,
+        "roi_ssim": 0.5634138991403073,
+        "roi_mae": 0.07526654750108719,
+        "time_sec": 42.556906938552856
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 38,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.9442189276298367,
+        "overall_psnr": 28.232667300609062,
+        "overall_mae": 0.018768971706440648,
+        "hippocampus_mae": 0.06880243326778765,
+        "hippocampus_ssim": 0.5342793295767772,
+        "amygdala_mae": 0.07775051226405977,
+        "amygdala_ssim": 0.44918093699165645,
+        "roi_ssim": 0.5350726291093048,
+        "roi_mae": 0.07132503390312195,
+        "time_sec": 5.508997201919556
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9473533702020122,
+        "overall_psnr": 28.306948519578352,
+        "overall_mae": 0.021590236518092568,
+        "hippocampus_mae": 0.07432291063138978,
+        "hippocampus_ssim": 0.5330386229927223,
+        "amygdala_mae": 0.07962745932600533,
+        "amygdala_ssim": 0.46719061037759174,
+        "roi_ssim": 0.5357257903892126,
+        "roi_mae": 0.07581834495067596,
+        "time_sec": 47.04559636116028
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 39,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.9218555875734871,
+        "overall_psnr": 27.39500116155289,
+        "overall_mae": 0.0359132507712095,
+        "hippocampus_mae": 0.077497747673118,
+        "hippocampus_ssim": 0.5496231011009086,
+        "amygdala_mae": 0.04785768115241703,
+        "amygdala_ssim": 0.5209116718052031,
+        "roi_ssim": 0.5581534484426194,
+        "roi_mae": 0.06954531371593475,
+        "time_sec": 6.302652835845947
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9234104204103246,
+        "overall_psnr": 26.8310980009268,
+        "overall_mae": 0.03750766445430223,
+        "hippocampus_mae": 0.08340424925344435,
+        "hippocampus_ssim": 0.5532820806567733,
+        "amygdala_mae": 0.05022305153924267,
+        "amygdala_ssim": 0.5040871890720926,
+        "roi_ssim": 0.5600284574715645,
+        "roi_mae": 0.07450173050165176,
+        "time_sec": 42.08507466316223
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 40,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.9239741114182286,
+        "overall_psnr": 26.372720223624793,
+        "overall_mae": 0.026369863520194936,
+        "hippocampus_mae": 0.08331699331301476,
+        "hippocampus_ssim": 0.5606254841356927,
+        "amygdala_mae": 0.051032920193990396,
+        "amygdala_ssim": 0.49704983123603347,
+        "roi_ssim": 0.5638767681821227,
+        "roi_mae": 0.07447677105665207,
+        "time_sec": 5.89729642868042
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9065932846083183,
+        "overall_psnr": 24.96627830192549,
+        "overall_mae": 0.0348006795871127,
+        "hippocampus_mae": 0.08051204777737712,
+        "hippocampus_ssim": 0.5250008661527082,
+        "amygdala_mae": 0.05550700227215549,
+        "amygdala_ssim": 0.4823715093056521,
+        "roi_ssim": 0.5293801854025654,
+        "roi_mae": 0.07366501539945602,
+        "time_sec": 42.9848153591156
+      },
+      "winner_ssim": "las"
+    },
+    {
+      "pair_idx": 41,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.9138114915720563,
+        "overall_psnr": 23.90176180556985,
+        "overall_mae": 0.036909995434154866,
+        "hippocampus_mae": 0.07926936496677713,
+        "hippocampus_ssim": 0.5681250119415737,
+        "amygdala_mae": 0.07777998579248192,
+        "amygdala_ssim": 0.5002315869150253,
+        "roi_ssim": 0.5698869730079381,
+        "roi_mae": 0.07884948700666428,
+        "time_sec": 5.851555585861206
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.8830489414146645,
+        "overall_psnr": 21.63469450308771,
+        "overall_mae": 0.05398689109187673,
+        "hippocampus_mae": 0.08734698925366617,
+        "hippocampus_ssim": 0.5271009897497551,
+        "amygdala_mae": 0.11285092755058776,
+        "amygdala_ssim": 0.4501201926742404,
+        "roi_ssim": 0.5287766509559177,
+        "roi_mae": 0.0945369303226471,
+        "time_sec": 42.90627932548523
+      },
+      "winner_ssim": "las"
+    },
+    {
+      "pair_idx": 42,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.8478883304030653,
+        "overall_psnr": 23.516851203616703,
+        "overall_mae": 0.055564993940168304,
+        "hippocampus_mae": 0.07937094581983876,
+        "hippocampus_ssim": 0.5343319896162015,
+        "amygdala_mae": 0.05025812523866815,
+        "amygdala_ssim": 0.4695133619141241,
+        "roi_ssim": 0.539036995443688,
+        "roi_mae": 0.07155998051166534,
+        "time_sec": 5.364739656448364
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.8582595399011819,
+        "overall_psnr": 23.70733169626496,
+        "overall_mae": 0.0535300839639366,
+        "hippocampus_mae": 0.07660540626846367,
+        "hippocampus_ssim": 0.5581006810284669,
+        "amygdala_mae": 0.05963569794903885,
+        "amygdala_ssim": 0.4777533577522744,
+        "roi_ssim": 0.5605750905522997,
+        "roi_mae": 0.07205243408679962,
+        "time_sec": 42.79552435874939
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 43,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.912640762107929,
+        "overall_psnr": 22.664535293543082,
+        "overall_mae": 0.04886279189718051,
+        "hippocampus_mae": 0.10820026896250101,
+        "hippocampus_ssim": 0.5769838493216377,
+        "amygdala_mae": 0.13934737225248628,
+        "amygdala_ssim": 0.5152320902690559,
+        "roi_ssim": 0.5781392510102931,
+        "roi_mae": 0.11698110401630402,
+        "time_sec": 5.992416620254517
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9347188852504754,
+        "overall_psnr": 25.494138513339845,
+        "overall_mae": 0.035396509547360545,
+        "hippocampus_mae": 0.08358448185793166,
+        "hippocampus_ssim": 0.5686641806029231,
+        "amygdala_mae": 0.11220499974689144,
+        "amygdala_ssim": 0.5082717291145348,
+        "roi_ssim": 0.5708885018095298,
+        "roi_mae": 0.09165303409099579,
+        "time_sec": 42.834529876708984
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 44,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.9238120183932184,
+        "overall_psnr": 27.738403443935514,
+        "overall_mae": 0.03481154387560085,
+        "hippocampus_mae": 0.06703890867382227,
+        "hippocampus_ssim": 0.6126546934026122,
+        "amygdala_mae": 0.044046916001225365,
+        "amygdala_ssim": 0.5750139356655226,
+        "roi_ssim": 0.6177597490764791,
+        "roi_mae": 0.06087015941739082,
+        "time_sec": 5.864351034164429
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9291272093152282,
+        "overall_psnr": 27.912461669674503,
+        "overall_mae": 0.03407667491329569,
+        "hippocampus_mae": 0.07004427273402948,
+        "hippocampus_ssim": 0.6152382352269762,
+        "amygdala_mae": 0.04224760898436629,
+        "amygdala_ssim": 0.5877103463396511,
+        "roi_ssim": 0.6213251654939114,
+        "roi_mae": 0.06258643418550491,
+        "time_sec": 43.946393728256226
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 45,
+      "subject_id": "002_S_1268",
+      "las": {
+        "overall_ssim": 0.9218585478097159,
+        "overall_psnr": 26.91586058931599,
+        "overall_mae": 0.038006268639715186,
+        "hippocampus_mae": 0.08123455907603389,
+        "hippocampus_ssim": 0.556111750119144,
+        "amygdala_mae": 0.0521698477273529,
+        "amygdala_ssim": 0.5084193987437428,
+        "roi_ssim": 0.563000710251552,
+        "roi_mae": 0.07343649864196777,
+        "time_sec": 5.947524785995483
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9338399360503498,
+        "overall_psnr": 26.823335688295593,
+        "overall_mae": 0.036374965689852816,
+        "hippocampus_mae": 0.09008685253308032,
+        "hippocampus_ssim": 0.5796774507302923,
+        "amygdala_mae": 0.05770956741475847,
+        "amygdala_ssim": 0.5371276385915303,
+        "roi_ssim": 0.5867159185290305,
+        "roi_mae": 0.08140002936124802,
+        "time_sec": 43.196507930755615
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 46,
+      "subject_id": "002_S_5178",
+      "las": {
+        "overall_ssim": 0.9582720920558347,
+        "overall_psnr": 28.551895979276615,
+        "overall_mae": 0.019318540918333536,
+        "hippocampus_mae": 0.06234290617957477,
+        "hippocampus_ssim": 0.5446771222221991,
+        "amygdala_mae": 0.05956006468940227,
+        "amygdala_ssim": 0.5291191179273359,
+        "roi_ssim": 0.549920743857364,
+        "roi_mae": 0.061531517654657364,
+        "time_sec": 5.608317613601685
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9462702185489766,
+        "overall_psnr": 24.76865878260824,
+        "overall_mae": 0.031378026430254946,
+        "hippocampus_mae": 0.07952479465635115,
+        "hippocampus_ssim": 0.5475603770321753,
+        "amygdala_mae": 0.0983235139269639,
+        "amygdala_ssim": 0.5085327637349615,
+        "roi_ssim": 0.5504302454170907,
+        "roi_mae": 0.08500589430332184,
+        "time_sec": 43.65224528312683
+      },
+      "winner_ssim": "las"
+    },
+    {
+      "pair_idx": 47,
+      "subject_id": "003_S_6268",
+      "las": {
+        "overall_ssim": 0.929905248004679,
+        "overall_psnr": 22.82458100119515,
+        "overall_mae": 0.041998966385632275,
+        "hippocampus_mae": 0.15010930370687195,
+        "hippocampus_ssim": 0.5256414333630138,
+        "amygdala_mae": 0.1031413203257531,
+        "amygdala_ssim": 0.4867176540484695,
+        "roi_ssim": 0.5329047765922503,
+        "roi_mae": 0.13600382208824158,
+        "time_sec": 6.056455373764038
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9469487019385382,
+        "overall_psnr": 25.650477585395052,
+        "overall_mae": 0.026491740653431833,
+        "hippocampus_mae": 0.11526132337982321,
+        "hippocampus_ssim": 0.5232549801614153,
+        "amygdala_mae": 0.07212107547410267,
+        "amygdala_ssim": 0.4390811201930416,
+        "roi_ssim": 0.5240173082339283,
+        "roi_mae": 0.10230538249015808,
+        "time_sec": 44.57123613357544
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 48,
+      "subject_id": "005_S_0324",
+      "las": {
+        "overall_ssim": 0.9512984825899082,
+        "overall_psnr": 28.361338454924617,
+        "overall_mae": 0.016538671943765362,
+        "hippocampus_mae": 0.09791615150732566,
+        "hippocampus_ssim": 0.5566709426114771,
+        "amygdala_mae": 0.05566870838680504,
+        "amygdala_ssim": 0.5055675342664515,
+        "roi_ssim": 0.5648179584179386,
+        "roi_mae": 0.08616255968809128,
+        "time_sec": 6.059124946594238
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.9540133843095511,
+        "overall_psnr": 28.819809463434176,
+        "overall_mae": 0.018488186191142647,
+        "hippocampus_mae": 0.10030695494907474,
+        "hippocampus_ssim": 0.5630837075180916,
+        "amygdala_mae": 0.061297135471805576,
+        "amygdala_ssim": 0.5077410258108705,
+        "roi_ssim": 0.5689079135837436,
+        "roi_mae": 0.08945409208536148,
+        "time_sec": 43.823705196380615
+      },
+      "winner_ssim": "bon_weighted"
+    },
+    {
+      "pair_idx": 49,
+      "subject_id": "005_S_0324",
+      "las": {
+        "overall_ssim": 0.9358029269459137,
+        "overall_psnr": 27.32884157841713,
+        "overall_mae": 0.02624528470436091,
+        "hippocampus_mae": 0.12253273909186316,
+        "hippocampus_ssim": 0.5452981527878782,
+        "amygdala_mae": 0.05920697790003226,
+        "amygdala_ssim": 0.5780603769837889,
+        "roi_ssim": 0.5401627454466891,
+        "roi_mae": 0.10664860159158707,
+        "time_sec": 5.688654184341431
+      },
+      "bon_weighted": {
+        "overall_ssim": 0.922068824874667,
+        "overall_psnr": 26.688053305274934,
+        "overall_mae": 0.03322742476544204,
+        "hippocampus_mae": 0.09546253175410008,
+        "hippocampus_ssim": 0.5556939650479132,
+        "amygdala_mae": 0.0776021290925501,
+        "amygdala_ssim": 0.5684129073485895,
+        "roi_ssim": 0.550678970901516,
+        "roi_mae": 0.09098257124423981,
+        "time_sec": 43.51285648345947
+      },
+      "winner_ssim": "las"
+    }
+  ],
+  "statistics": {
+    "bon_wins": 12,
+    "las_wins": 38,
+    "t_statistic": -0.8253578345127777,
+    "p_value": 0.41802884283657493
+  }
+}

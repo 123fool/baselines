@@ -1,0 +1,171 @@
+{
+  "subject_id": "005_S_0572",
+  "n_visits": 6,
+  "model": "Inn5-CNet-Avg3",
+  "avg_n": 3,
+  "scale_factor": 0.9665206670761108,
+  "gif_path": "/home/wangchong/data/fwz/output/classification_animation/005_S_0572_progression.gif",
+  "chart_path": "/home/wangchong/data/fwz/output/classification_animation/005_S_0572_trajectory.png",
+  "timestamp": "2026-04-13 17:42:12",
+  "visits": [
+    {
+      "visit_idx": 1,
+      "months_from_baseline": 0.0,
+      "age": 0.7,
+      "real_diagnosis": "MCI",
+      "predicted_class": "MCI",
+      "class_probs": {
+        "AD": 0.0002978969623137369,
+        "CN": 0.0004238921216153391,
+        "MCI": 0.999278210916071
+      },
+      "ssim": 1.0,
+      "psnr": 99.0,
+      "mae": 0.0,
+      "rmse": 0.0,
+      "volumes": {
+        "cerebral_cortex": 0.8427784310875626,
+        "hippocampus": 0.46706875753920385,
+        "amygdala": 0.4969660194174757,
+        "cerebral_white_matter": 0.7431070497410538,
+        "lateral_ventricle": 0.5684093653823679
+      }
+    },
+    {
+      "visit_idx": 2,
+      "months_from_baseline": 6.241787122207621,
+      "age": 0.705201916495551,
+      "real_diagnosis": "MCI",
+      "predicted_class": "MCI",
+      "class_probs": {
+        "AD": 0.0002860526192095857,
+        "CN": 0.00042389714383517067,
+        "MCI": 0.9992900502369553
+      },
+      "ssim": 0.9139033498047483,
+      "psnr": 25.641144842664886,
+      "mae": 0.032560259103775024,
+      "rmse": 0.05223273391681776,
+      "volumes": {
+        "cerebral_cortex": 0.8403692594990508,
+        "hippocampus": 0.45934861278648975,
+        "amygdala": 0.4842233009708738,
+        "cerebral_white_matter": 0.7435898739066574,
+        "lateral_ventricle": 0.575928162374849
+      }
+    },
+    {
+      "visit_idx": 3,
+      "months_from_baseline": 13.206307490144546,
+      "age": 0.7110061601642711,
+      "real_diagnosis": "MCI",
+      "predicted_class": "MCI",
+      "class_probs": {
+        "AD": 0.00048654193210154856,
+        "CN": 0.00044266299882523555,
+        "MCI": 0.9990707950690731
+      },
+      "ssim": 0.9501480536251087,
+      "psnr": 29.035662764657026,
+      "mae": 0.0172344371676445,
+      "rmse": 0.03533595732589881,
+      "volumes": {
+        "cerebral_cortex": 0.8358724328228708,
+        "hippocampus": 0.4439083232810615,
+        "amygdala": 0.49150485436893204,
+        "cerebral_white_matter": 0.7408555644214496,
+        "lateral_ventricle": 0.5791226771592193
+      }
+    },
+    {
+      "visit_idx": 4,
+      "months_from_baseline": 18.69250985545335,
+      "age": 0.7155783709787816,
+      "real_diagnosis": "MCI",
+      "predicted_class": "MCI",
+      "class_probs": {
+        "AD": 0.0004370719059023733,
+        "CN": 0.0004141246955878911,
+        "MCI": 0.9991488033985098
+      },
+      "ssim": 0.9166300199093042,
+      "psnr": 25.621591568142165,
+      "mae": 0.030375247821211815,
+      "rmse": 0.0523504502897437,
+      "volumes": {
+        "cerebral_cortex": 0.8316310576131144,
+        "hippocampus": 0.44607961399276236,
+        "amygdala": 0.4842233009708738,
+        "cerebral_white_matter": 0.7447079930270025,
+        "lateral_ventricle": 0.5866804316490709
+      }
+    },
+    {
+      "visit_idx": 5,
+      "months_from_baseline": 24.67148488830486,
+      "age": 0.7205612594113621,
+      "real_diagnosis": "MCI",
+      "predicted_class": "MCI",
+      "class_probs": {
+        "AD": 0.0004932407010837338,
+        "CN": 0.00036826570053576416,
+        "MCI": 0.9991384935983805
+      },
+      "ssim": 0.8912334060601762,
+      "psnr": 22.053237549564116,
+      "mae": 0.04529895260930061,
+      "rmse": 0.07894745284458193,
+      "volumes": {
+        "cerebral_cortex": 0.8361587146386903,
+        "hippocampus": 0.43835946924004826,
+        "amygdala": 0.44660194174757284,
+        "cerebral_white_matter": 0.7329474128248263,
+        "lateral_ventricle": 0.6003545132260704
+      }
+    },
+    {
+      "visit_idx": 6,
+      "months_from_baseline": 36.300919842312744,
+      "age": 0.7302532511978097,
+      "real_diagnosis": "MCI",
+      "predicted_class": "MCI",
+      "class_probs": {
+        "AD": 0.0005394232899928354,
+        "CN": 0.000368248684679394,
+        "MCI": 0.9990923280253277
+      },
+      "ssim": 0.9126636938149365,
+      "psnr": 25.946706918332193,
+      "mae": 0.023178335279226303,
+      "rmse": 0.050427176743965046,
+      "volumes": {
+        "cerebral_cortex": 0.8252491752881537,
+        "hippocampus": 0.41230398069963814,
+        "amygdala": 0.441747572815534,
+        "cerebral_white_matter": 0.7336030372181196,
+        "lateral_ventricle": 0.6412014492189022
+      }
+    }
+  ],
+  "classifier": {
+    "type": "GradientBoosting",
+    "n_train_samples": 640,
+    "classes": [
+      "AD",
+      "CN",
+      "MCI"
+    ],
+    "feature_importance": {
+      "cerebral_cortex": 0.19146590505321512,
+      "hippocampus": 0.15300598273242444,
+      "amygdala": 0.06337827104613639,
+      "cerebral_white_matter": 0.4343669683230577,
+      "lateral_ventricle": 0.1577828728451664
+    }
+  },
+  "overall_metrics": {
+    "mean_ssim": 0.9169157046428549,
+    "mean_psnr": 25.65966872867208,
+    "mean_mae": 0.02972944639623165
+  }
+}

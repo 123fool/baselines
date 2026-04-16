@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="refresh" content="30">
+<title>BrLP MCI→AD 研究监控面板</title>
+<style>
+:root {
+  --bg: #0d1117; --card: #161b22; --border: #30363d; --text: #c9d1d9;
+  --text2: #8b949e; --accent: #58a6ff; --green: #3fb950; --orange: #d29922;
+  --red: #f85149; --purple: #bc8cff;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; font-size:14px; }
+.header { background:linear-gradient(135deg,#1a1f36,#0d1117); padding:16px 24px; border-bottom:1px solid var(--border);
+           display:flex; align-items:center; justify-content:space-between; }
+.header h1 { font-size:18px; color:var(--accent); font-weight:600; }
+.header .meta { font-size:12px; color:var(--text2); }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:14px; }
+.card-title { font-size:13px; font-weight:600; color:var(--accent); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px; }
+.full { grid-column:1/-1; }
+.gpu-card { background:#1c2333; border-radius:6px; padding:10px; margin-bottom:8px; }
+.gpu-header { font-size:13px; font-weight:600; color:var(--green); margin-bottom:6px; }
+.metric-row { display:flex; align-items:center; gap:8px; margin:4px 0; font-size:12px; }
+.metric-row span { min-width:50px; color:var(--text2); }
+.bar { flex:1; background:#21262d; border-radius:4px; height:18px; overflow:hidden; position:relative; }
+.bar-fill { height:100%; border-radius:4px; font-size:11px; line-height:18px; padding-left:6px; color:#fff;
+             min-width:fit-content; white-space:nowrap; transition:width 0.3s; }
+pre { font-size:11px; color:var(--text2); white-space:pre-wrap; word-break:break-all; }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); color:var(--accent); font-weight:600; }
+td { padding:5px 8px; border-bottom:1px solid #21262d; }
+td.cmd { font-family:monospace; font-size:11px; color:var(--text2); max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.thinking-box { background:#1c2333; border-left:3px solid var(--purple); padding:10px 14px; border-radius:4px;
+                 font-size:13px; color:var(--text); line-height:1.6; min-height:40px; max-height:150px; overflow-y:auto; }
+.op-item { padding:6px 10px; border-left:3px solid var(--border); margin-bottom:4px; border-radius:0 4px 4px 0; }
+.op-think { border-left-color:var(--purple); background:rgba(188,140,255,0.05); }
+.op-code { border-left-color:var(--accent); background:rgba(88,166,255,0.05); }
+.op-test { border-left-color:var(--orange); background:rgba(210,153,34,0.05); }
+.op-result { border-left-color:var(--green); background:rgba(63,185,80,0.05); }
+.op-info { border-left-color:var(--text2); }
+.op-time { font-size:10px; color:var(--text2); }
+.op-text { font-size:12px; line-height:1.5; }
+.ops-container { max-height:400px; overflow-y:auto; }
+.task-item { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #21262d; }
+.task-name { min-width:200px; font-size:13px; }
+.task-bar { flex:1; }
+.task-bar .bar-fill { background:var(--accent); }
+.task-done .task-bar .bar-fill { background:var(--green); }
+.task-running .task-bar .bar-fill { background:var(--orange); }
+.task-eta { font-size:11px; color:var(--text2); min-width:80px; text-align:right; }
+.phase-badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600;
+                background:rgba(88,166,255,0.15); color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🧬 BrLP MCI→AD 研究项目 — 实验监控面板</h1>
+  <div class="meta">
+    <span class="phase-badge">Section 37: 扩大规模验证精炼网络</span>
+    &nbsp; 更新: 2026-04-16 00:31:53 &nbsp; 服务器: 10.96.27.109:2638
+  </div>
+</div>
+
+<div class="grid">
+  <!-- 当前思考 -->
+  <div class="card full">
+    <div class="card-title">🧠 当前思考与方向</div>
+    <div class="thinking-box">[关键对比结果] S35 baseline vs S36 refinement (均50样本):
+基线: Overall=0.9302, AD-Comp=0.8541, Hippo=0.8190, Pallidum=0.6917
+精炼: Overall=0.9542, AD-Comp=0.9230, Hippo=0.9227, Pallidum=0.8685
+提升: AD-Comp+0.069, Hippo+0.104, Pallidum+0.177!
+→ 精炼网络效果极为显著! 但Putamen/Pallidum仍<0.9
+训练继续中: RefC_cont val=0.0328(ep3), 未见过拟合</div>
+  </div>
+
+  <!-- GPU -->
+  <div class="card">
+    <div class="card-title">🖥️ GPU 状态</div>
+    <div class="gpu-card"><div class="gpu-header">无法获取 GPU 信息</div></div>
+  </div>
+
+  <!-- 内存 & 磁盘 -->
+  <div class="card">
+    <div class="card-title">💾 内存 & 磁盘 &nbsp; <span>Load: N/A</span></div>
+    <pre>连接失败: timed out</pre>
+    <div style="margin-top:8px;font-size:12px;color:var(--text2);">磁盘:</div>
+    <pre></pre>
+  </div>
+
+  <!-- 任务进度 -->
+  <div class="card full">
+    <div class="card-title">📋 训练 / 测试进度</div>
+    <div class="task-item task-done">
+          <div class="task-name">✅ 风险分析与问题诊断</div>
+          <div class="bar task-bar"><div class="bar-fill" style="width:100%">100%</div></div>
+          <div class="task-eta">完成</div>
+        </div><div class="task-item task-done">
+          <div class="task-name">✅ 改进脚本(v2)</div>
+          <div class="bar task-bar"><div class="bar-fill" style="width:100%">100%</div></div>
+          <div class="task-eta">完成</div>
+        </div><div class="task-item task-running">
+          <div class="task-name">🔄 RefC_v2_cont训练(GPU0)</div>
+          <div class="bar task-bar"><div class="bar-fill" style="width:15%">15%</div></div>
+          <div class="task-eta">Ep3/20, val=0.0328(最佳)</div>
+        </div><div class="task-item task-running">
+          <div class="task-name">🔄 RefC_v2_fresh训练(GPU1)</div>
+          <div class="bar task-bar"><div class="bar-fill" style="width:15%">15%</div></div>
+          <div class="task-eta">Ep3/20, val=0.0349</div>
+        </div><div class="task-item task-running">
+          <div class="task-name">🔄 RefD_v2_highnoise训练(GPU2)</div>
+          <div class="bar task-bar"><div class="bar-fill" style="width:20%">20%</div></div>
+          <div class="task-eta">Ep4/20, val=0.0345</div>
+        </div><div class="task-item task-done">
+          <div class="task-name">✅ S36全量评估(50样本)</div>
+          <div class="bar task-bar"><div class="bar-fill" style="width:100%">100%</div></div>
+          <div class="task-eta">完成 ✅</div>
+        </div><div class="task-item task-done">
+          <div class="task-name">✅ S35 baseline评估(50样本)</div>
+          <div class="bar task-bar"><div class="bar-fill" style="width:100%">100%</div></div>
+          <div class="task-eta">完成 ✅ AD-Comp=0.8541</div>
+        </div>
+  </div>
+
+  <!-- AI 操作日志 -->
+  <div class="card full">
+    <div class="card-title">📝 AI 操作日志</div>
+    <div class="ops-container"><div class="op-item op-result">
+          <div class="op-time">00:35:00</div>
+          <div class="op-text">📊 训练持续改善: RefC_cont val=0.0328(ep3,最佳), RefC_fresh val=0.0349(ep3), RefD val=0.0345(ep4)</div>
+        </div><div class="op-item op-think">
+          <div class="op-time">00:35:00</div>
+          <div class="op-text">🧠 精炼网络效果显著! AD-Comp: 0.8541→0.9230(+0.069), Hippo: 0.819→0.923(+0.104), Pallidum: 0.692→0.869(+0.177)</div>
+        </div><div class="op-item op-result">
+          <div class="op-time">00:35:00</div>
+          <div class="op-text">📊 S35基线(无精炼)50样本完成! Overall=0.9302, AD-Comp=0.8541, Hippo=0.8190</div>
+        </div><div class="op-item op-think">
+          <div class="op-time">00:21:48</div>
+          <div class="op-text">🧠 小样本偏差存在但不严重(降约2%), 不是过拟合</div>
+        </div><div class="op-item op-result">
+          <div class="op-time">00:21:48</div>
+          <div class="op-text">📊 S36 50样本验证: Overall=0.9542, AD-Comp=0.9230, Hippo=0.9227</div>
+        </div><div class="op-item op-result">
+          <div class="op-time">00:17:26</div>
+          <div class="op-text">📊 RefC_v2_fresh Ep0: train=0.0494 val=0.0367 | RefD Ep0: train=0.0520 val=0.0378</div>
+        </div><div class="op-item op-code">
+          <div class="op-time">00:14:08</div>
+          <div class="op-text">💻 S36全量评估启动: 50测试样本(此前仅5个)</div>
+        </div><div class="op-item op-code">
+          <div class="op-time">00:14:08</div>
+          <div class="op-text">💻 S37训练启动: 3实验×20ep, train=371, valid=44</div>
+        </div><div class="op-item op-think">
+          <div class="op-time">00:08:39</div>
+          <div class="op-text">🧠 CSV: train=371, valid=44, test=50, 之前仅用了5个测试样本</div>
+        </div><div class="op-item op-think">
+          <div class="op-time">00:08:39</div>
+          <div class="op-text">🧠 [S37] 风险分析: n_test=5太小, 5ep太少, 需全面验证</div>
+        </div><div class="op-item op-result">
+          <div class="op-time">00:30:00</div>
+          <div class="op-text">📊 S36完成! 最佳RefC_H1a30: AD-Comp=0.9408, Hippo=0.9302</div>
+        </div><div class="op-item op-test">
+          <div class="op-time">23:45:48</div>
+          <div class="op-text">🧪 评估流水线已启动: 6个配置</div>
+        </div><div class="op-item op-result">
+          <div class="op-time">23:32:25</div>
+          <div class="op-text">📊 Ep0完成: RefA=0.0137, RefB=0.0391, RefC=0.0510, 每epoch约3min</div>
+        </div><div class="op-item op-code">
+          <div class="op-time">23:28:32</div>
+          <div class="op-text">💻 3个精炼网络训练已启动 (GPU 0/1/2)</div>
+        </div><div class="op-item op-code">
+          <div class="op-time">23:28:31</div>
+          <div class="op-text">💻 脚本已上传到服务器</div>
+        </div><div class="op-item op-info">
+          <div class="op-time">23:19:41</div>
+          <div class="op-text">ℹ️ 面板初始化完成</div>
+        </div><div class="op-item op-code">
+          <div class="op-time">23:31:00</div>
+          <div class="op-text">💻 正在编写 train_refinement.py 和 evaluate_refinement.py</div>
+        </div><div class="op-item op-think">
+          <div class="op-time">23:30:00</div>
+          <div class="op-text">🧠 核心思路: 轻量3D U-Net, 输入concat(pred_AD,real_BL), 残差学习</div>
+        </div><div class="op-item op-think">
+          <div class="op-time">23:30:00</div>
+          <div class="op-text">🧠 S36方案: 图像空间精炼网络突破AE天花板(0.8288)</div>
+        </div><div class="op-item op-result">
+          <div class="op-time">23:20:00</div>
+          <div class="op-text">📊 S35完成: ExpC(L1+SSIM+multi)+H1a30 → AD-Comp=0.8533</div>
+        </div></div>
+  </div>
+
+  <!-- 进程列表 -->
+  <div class="card">
+    <div class="card-title">⚙️ 运行中的进程</div>
+    <table>
+      <tr><th>PID</th><th>CPU</th><th>MEM</th><th>命令</th></tr>
+      <tr><td colspan="4" style="color:var(--text2)">无活跃 Python 进程</td></tr>
+    </table>
+  </div>
+
+  <!-- 实验结果汇总 -->
+  <div class="card">
+    <div class="card-title">📊 实验结果汇总</div>
+    <table>
+      <tr><th>实验</th><th>指标</th><th>值</th><th>状态</th></tr>
+      <tr><td>S36 RefC_H1a30 (50样本)</td><td>AD-Comp / Hippo / Overall</td><td>0.9230 / 0.9227 / 0.9542</td><td>✅ 已验证</td></tr><tr><td>S36 RefC_H1a30 (旧5样本)</td><td>AD-Comp / Hippo / Overall</td><td>0.9408 / 0.9302 / 0.9749</td><td>⚠️ 小样本</td></tr><tr><td>S35 baseline (50样本)</td><td>AD-Comp / Hippo / Overall</td><td>0.8541 / 0.8190 / 0.9302</td><td>✅ 已验证</td></tr><tr><td>精炼提升幅度</td><td>AD-Comp / Hippo / Pallidum</td><td>+0.069 / +0.104 / +0.177</td><td>📈 显著有效</td></tr>
+    </table>
+  </div>
+</div>
+
+</body>
+</html>

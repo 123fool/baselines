@@ -11,7 +11,8 @@ from .gradacc import GradientAccumulation
 from .losses import KLDivergenceLoss
 from .sampling import (
     sample_using_controlnet_and_z, 
-    sample_using_diffusion
+    sample_using_diffusion,
+    sample_et_bon_weighted
 )
 from .networks import (
     init_autoencoder,
